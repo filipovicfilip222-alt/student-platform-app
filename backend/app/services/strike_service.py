@@ -73,6 +73,8 @@ async def add_strike(
     reason: StrikeReason,
     points: int,
 ) -> tuple[StrikeRecord, int, StudentBlock | None]:
+    from app.tasks.notifications import send_block_activated, send_strike_added
+
     existing_result = await db.execute(
         select(StrikeRecord).where(
             StrikeRecord.student_id == student_id,
@@ -98,6 +100,10 @@ async def add_strike(
     total_points = await get_total_strike_points(db, student_id)
     block = await _apply_block_policy(db, student_id, total_points)
     await db.flush()
+
+    send_strike_added.delay(str(student_id), points, total_points)
+    if block is not None and total_points >= 3:
+        send_block_activated.delay(str(student_id), block.blocked_until.isoformat())
 
     return strike, total_points, block
 

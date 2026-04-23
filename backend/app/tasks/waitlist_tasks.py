@@ -9,12 +9,10 @@ from sqlalchemy.orm import selectinload
 from app.celery_app import celery_app
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
-from app.core.email import send_generic_notification_email
 from app.models.appointment import Appointment
 from app.models.availability_slot import AvailabilitySlot
 from app.models.enums import AppointmentStatus
-from app.models.professor import Professor
-from app.models.user import User
+from app.tasks.notifications import send_waitlist_offer
 from app.services import waitlist_service
 
 
@@ -46,7 +44,6 @@ async def _process_waitlist_offers_async() -> int:
             for slot_id in slot_ids:
                 slot_result = await db.execute(
                     select(AvailabilitySlot)
-                    .options(selectinload(AvailabilitySlot.professor).selectinload(Professor.user))
                     .where(AvailabilitySlot.id == slot_id)
                 )
                 slot = slot_result.scalar_one_or_none()
@@ -83,18 +80,14 @@ async def _process_waitlist_offers_async() -> int:
                     if not offered:
                         continue
 
-                    user_result = await db.execute(select(User).where(User.id == candidate_id))
-                    user = user_result.scalar_one_or_none()
-                    if user is not None:
-                        send_generic_notification_email(
-                            to_email=user.email,
-                            subject="Slobodno mesto sa waitlist-e",
-                            title="Imate ponudu za termin",
-                            body_html=(
-                                f"<p>Otvorilo se mesto za termin <strong>{slot.slot_datetime.isoformat()}</strong>.</p>"
-                                "<p>Ponuda je aktivna 2 sata.</p>"
-                            ),
-                        )
+                    expires_at = datetime.now(timezone.utc) + timedelta(
+                        seconds=waitlist_service.WAITLIST_OFFER_TTL_SECONDS
+                    )
+                    send_waitlist_offer.delay(
+                        str(candidate_id),
+                        str(slot_id),
+                        expires_at.isoformat(),
+                    )
 
                     sent_offers += 1
                     seats_left -= 1

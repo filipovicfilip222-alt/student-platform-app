@@ -7,7 +7,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.email import send_generic_notification_email
 from app.models.appointment import Appointment, AppointmentParticipant
 from app.models.availability_slot import AvailabilitySlot, BlackoutDate
 from app.models.enums import (
@@ -201,15 +200,9 @@ async def create_appointment(
         await db.refresh(appointment)
 
         if appointment.status == AppointmentStatus.APPROVED:
-            send_generic_notification_email(
-                to_email=current_user.email,
-                subject="Termin je potvrđen",
-                title="Vaš termin je potvrđen",
-                body_html=(
-                    f"<p>Termin kod profesora {professor.user.full_name} je uspešno potvrđen.</p>"
-                    f"<p>Datum i vreme: <strong>{slot.slot_datetime.isoformat()}</strong></p>"
-                ),
-            )
+            from app.tasks.notifications import send_appointment_confirmed
+
+            send_appointment_confirmed.delay(str(appointment.id))
 
         return appointment
     finally:
@@ -261,16 +254,6 @@ async def cancel_appointment(
 
     await db.flush()
     await db.refresh(appointment)
-
-    send_generic_notification_email(
-        to_email=current_user.email,
-        subject="Termin je otkazan",
-        title="Uspešno ste otkazali termin",
-        body_html=(
-            f"<p>Termin zakazan za <strong>{appointment.slot.slot_datetime.isoformat()}</strong> "
-            "je otkazan.</p>"
-        ),
-    )
 
     return appointment
 
