@@ -6,6 +6,7 @@ from fastapi import APIRouter, Query
 
 from app.core.dependencies import CurrentStudent, DBSession, RedisClient
 from app.models.enums import ConsultationType, Faculty
+from app.schemas.auth import MessageResponse
 from app.schemas.student import (
     AppointmentCancelResponse,
     AppointmentCreateRequest,
@@ -14,7 +15,7 @@ from app.schemas.student import (
     ProfessorProfileResponse,
     ProfessorSearchResponse,
 )
-from app.services import booking_service, search_service
+from app.services import booking_service, search_service, waitlist_service
 
 router = APIRouter()
 
@@ -104,7 +105,7 @@ async def create_appointment(
 @router.delete(
     "/appointments/{id}",
     response_model=AppointmentCancelResponse,
-    summary="Otkazivanje termina (24h pravilo)",
+    summary="Otkazivanje termina (late-cancel strike < 12h)",
 )
 async def cancel_appointment(
     id: UUID,
@@ -142,3 +143,33 @@ async def list_my_appointments(
         )
         for appointment in appointments
     ]
+
+
+@router.post(
+    "/waitlist/{slot_id}",
+    response_model=MessageResponse,
+    summary="Prijava na waitlist",
+)
+async def join_waitlist(
+    slot_id: UUID,
+    db: DBSession,
+    redis: RedisClient,
+    current_user: CurrentStudent,
+) -> MessageResponse:
+    position = await waitlist_service.join_waitlist(db, redis, current_user, slot_id)
+    return MessageResponse(message=f"Uspešno ste prijavljeni na waitlist. Pozicija: {position}.")
+
+
+@router.delete(
+    "/waitlist/{slot_id}",
+    response_model=MessageResponse,
+    summary="Odjava sa waitlist",
+)
+async def leave_waitlist(
+    slot_id: UUID,
+    db: DBSession,
+    redis: RedisClient,
+    current_user: CurrentStudent,
+) -> MessageResponse:
+    await waitlist_service.leave_waitlist(db, redis, current_user, slot_id)
+    return MessageResponse(message="Uspešno ste se odjavili sa waitlist-e.")

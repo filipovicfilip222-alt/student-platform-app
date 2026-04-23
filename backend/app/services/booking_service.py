@@ -18,6 +18,7 @@ from app.models.professor import Professor
 from app.models.strike import StudentBlock
 from app.models.user import User
 from app.schemas.student import AppointmentCreateRequest
+from app.services import strike_service
 
 LOCK_SCRIPT = """
 if redis.call("exists", KEYS[1]) == 0 then
@@ -242,13 +243,22 @@ async def cancel_appointment(
         )
 
     now_utc = datetime.now(timezone.utc)
-    if appointment.slot.slot_datetime - now_utc < timedelta(hours=24):
+    time_until_start = appointment.slot.slot_datetime - now_utc
+    if time_until_start <= timedelta(0):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Termin nije moguće otkazati manje od 24h pre početka.",
+            detail="Termin nije moguće otkazati nakon što je počeo.",
         )
 
     appointment.status = AppointmentStatus.CANCELLED
+
+    if time_until_start < timedelta(hours=12):
+        await strike_service.add_late_cancel_strike(
+            db=db,
+            student_id=current_user.id,
+            appointment_id=appointment.id,
+        )
+
     await db.flush()
     await db.refresh(appointment)
 

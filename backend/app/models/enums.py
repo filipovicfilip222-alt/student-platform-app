@@ -24,6 +24,7 @@ class AppointmentStatus(str, enum.Enum):
     REJECTED = "REJECTED"
     CANCELLED = "CANCELLED"
     COMPLETED = "COMPLETED"
+    NO_SHOW = "NO_SHOW"
 
 
 class TopicCategory(str, enum.Enum):

@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -8,6 +9,8 @@ celery_app = Celery(
     backend=settings.CELERY_RESULT_BACKEND,
     include=[
         "app.tasks.email_tasks",
+        "app.tasks.strike_tasks",
+        "app.tasks.waitlist_tasks",
     ],
 )
 
@@ -21,4 +24,14 @@ celery_app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
+    beat_schedule={
+        "detect-no-show-every-30-minutes": {
+            "task": "strike_tasks.detect_no_show",
+            "schedule": crontab(minute="*/30"),
+        },
+        "process-waitlist-offers-every-5-minutes": {
+            "task": "waitlist_tasks.process_waitlist_offers",
+            "schedule": crontab(minute="*/5"),
+        },
+    },
 )
