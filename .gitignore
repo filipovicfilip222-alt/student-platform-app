@@ -1,0 +1,127 @@
+# ============================================================
+# Python / Backend
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables — NEVER commit real .env files
+backend/.env
+backend/.env.local
+scripts/.env
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# mypy / pyright
+.mypy_cache/
+.pyright/
+
+# ============================================================
+# Node.js / Frontend
+# ============================================================
+node_modules/
+frontend/node_modules/
+
+# Next.js build output
+frontend/.next/
+frontend/out/
+frontend/dist/
+frontend/.turbo/
+
+# Environment variables
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Next.js cache
+frontend/.cache/
+
+# TypeScript
+*.tsbuildinfo
+frontend/next-env.d.ts
+
+# PWA generated files
+frontend/public/workbox-*.js
+frontend/public/sw.js
+frontend/public/sw.js.map
+frontend/public/fallback-*.js
+
+# ============================================================
+# Docker / Infrastructure
+# ============================================================
+# Docker volumes and runtime data
+infra/postgres-data/
+infra/redis-data/
+infra/minio-data/
+
+# Local docker-compose overrides
+docker-compose.override.yml
+docker-compose.local.yml
+
+# ============================================================
+# IDE / Editor
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ============================================================
+# OS
+# ============================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# Logs
+# ============================================================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============================================================
+# Secrets / Certificates
+# ============================================================
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+
+# ============================================================
+# Misc
+# ============================================================
+.tmp/
+tmp/
+temp/
