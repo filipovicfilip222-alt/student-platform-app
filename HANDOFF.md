@@ -2,7 +2,7 @@
 ## Studentska Platforma — FON & ETF
 **Datum:** April 2026  
 **Od:** Filip  
-**Za:** [Drugarevo ime]
+**Za:** Stefan
 
 ---
 
