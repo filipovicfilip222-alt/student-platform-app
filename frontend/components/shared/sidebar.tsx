@@ -14,13 +14,18 @@
 
 "use client"
 
-import { GraduationCap } from "lucide-react"
+import { GraduationCap, LogOut } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
+import { Button } from "@/components/ui/button"
 import { NAV_ITEMS } from "@/lib/constants/nav-items"
 import { roleLabel } from "@/lib/constants/roles"
 import { ROUTES } from "@/lib/constants/routes"
+import { useLogout } from "@/lib/hooks/use-auth"
+import { useAuthStore } from "@/lib/stores/auth"
 import { cn } from "@/lib/utils"
+import { toastApiError } from "@/lib/utils/errors"
 import type { Role } from "@/types/common"
 
 import { SidebarNavItem } from "./sidebar-nav-item"
@@ -47,8 +52,22 @@ export function Sidebar({
   onNavigate,
   className,
 }: SidebarProps) {
+  const router = useRouter()
+  const user = useAuthStore((s) => s.user)
+  const logout = useLogout()
   const items = NAV_ITEMS[role]
   const href = homeHref ?? ROLE_HOME[role]
+
+  async function handleLogout() {
+    try {
+      await logout.mutateAsync()
+    } catch (err) {
+      toastApiError(err, "Odjava nije potvrđena sa serverom")
+    } finally {
+      onNavigate?.()
+      router.replace(ROUTES.login)
+    }
+  }
 
   return (
     <aside
@@ -77,10 +96,31 @@ export function Sidebar({
         ))}
       </nav>
 
-      <div className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
-        <span className="font-medium uppercase tracking-wide">
+      <div className="space-y-2 border-t border-border px-3 py-3">
+        {user && (
+          <div className="px-1 pb-1 text-xs leading-tight">
+            <div className="truncate font-medium text-foreground">
+              {`${user.first_name} ${user.last_name}`.trim()}
+            </div>
+            <div className="truncate text-muted-foreground">{user.email}</div>
+          </div>
+        )}
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={handleLogout}
+          disabled={logout.isPending}
+          className="w-full justify-start gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+        >
+          <LogOut aria-hidden />
+          {logout.isPending ? "Odjavljivanje…" : "Odjavi se"}
+        </Button>
+
+        <div className="px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           {roleLabel(role)}
-        </span>
+        </div>
       </div>
     </aside>
   )

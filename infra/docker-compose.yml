@@ -102,10 +102,12 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-studentska}:${POSTGRES_PASSWORD:-studentska_pass}@postgres:5432/${POSTGRES_DB:-studentska_platforma}
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis_pass}@redis:6379/0
+      PYTHONPATH: /app
     env_file:
       - ../backend/.env
     volumes:
       - ../backend:/app
+      - ../scripts:/scripts:ro
     ports:
       - "8000:8000"
     depends_on:

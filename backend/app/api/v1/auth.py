@@ -33,6 +33,13 @@ router = APIRouter()
 _REFRESH_COOKIE = "refresh_token"
 
 # Shared cookie kwargs — production vs. development
+#
+# Path MUST be "/" (not "/api/v1/auth"): the Next.js middleware reads this
+# cookie on every protected navigation (e.g. /dashboard, /admin) to decide
+# whether the user has an active session. A narrower path would make the
+# browser withhold the cookie on those navigations, so middleware would
+# redirect authenticated users back to /login (infinite loop after login).
+# The cookie stays HttpOnly + SameSite=Lax, so it is still safe.
 def _refresh_cookie_params(max_age: int) -> dict:
     return dict(
         key=_REFRESH_COOKIE,
@@ -40,7 +47,7 @@ def _refresh_cookie_params(max_age: int) -> dict:
         httponly=True,
         secure=settings.APP_ENV != "development",
         samesite="lax",
-        path="/api/v1/auth",
+        path="/",
     )
 
 
@@ -151,10 +158,10 @@ async def logout(
 ) -> MessageResponse:
     await auth_service.logout(redis, str(current_user.id))
 
-    # Clear the refresh cookie
+    # Clear the refresh cookie (path must match the one used when setting it)
     response.delete_cookie(
         key=_REFRESH_COOKIE,
-        path="/api/v1/auth",
+        path="/",
         httponly=True,
         secure=settings.APP_ENV != "development",
         samesite="lax",

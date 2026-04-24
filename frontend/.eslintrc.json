@@ -1,0 +1,17 @@
+{
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "react/no-unescaped-entities": "off",
+    "@next/next/no-page-custom-font": "off"
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    ".next/",
+    "out/",
+    "public/sw.js",
+    "public/workbox-*.js",
+    "e2e/",
+    "playwright-report/",
+    "test-results/"
+  ]
+}

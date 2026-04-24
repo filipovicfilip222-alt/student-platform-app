@@ -20,6 +20,7 @@
 import { LogOut, User } from "lucide-react"
 import { useRouter } from "next/navigation"
 
+import { PushSubscriptionToggle } from "@/components/notifications/push-subscription-toggle"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -104,6 +105,17 @@ export function UserMenu() {
           <User aria-hidden />
           Profil
         </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        <div
+          className="px-2 py-1"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          role="presentation"
+        >
+          <PushSubscriptionToggle />
+        </div>
 
         <DropdownMenuSeparator />
 

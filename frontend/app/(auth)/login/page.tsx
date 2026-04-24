@@ -28,7 +28,16 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { authApi } from "@/lib/api/auth"
+import { ROUTES } from "@/lib/constants/routes"
 import { useAuthStore } from "@/lib/stores/auth"
+import type { Role } from "@/types/common"
+
+const ROLE_HOME: Record<Role, string> = {
+  STUDENT: ROUTES.dashboard,
+  PROFESOR: ROUTES.professorDashboard,
+  ASISTENT: ROUTES.professorDashboard,
+  ADMIN: ROUTES.admin,
+}
 
 const loginSchema = z.object({
   email: z
@@ -60,8 +69,9 @@ function LoginForm() {
     try {
       const { data } = await authApi.login(values)
       setAuth(data.user, data.access_token)
-      const from = searchParams.get("from") ?? "/dashboard"
-      router.replace(from)
+      const from = searchParams.get("from")
+      const destination = from && from.startsWith("/") ? from : ROLE_HOME[data.user.role]
+      router.replace(destination)
     } catch (err) {
       const axiosErr = err as AxiosError<{ detail: string }>
       const msg =

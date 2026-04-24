@@ -117,54 +117,55 @@ Legenda: ✅ radi • ⚠️ djelimično / stub / bug • ❌ ne postoji
 | §3.3 Chat + CRM | ❌ | ❌ WebSocket chat, CRM beleške CRUD |
 | §4.1 Admin users | ❌ | ❌ Sve (CRUD, bulk CSV, impersonacija, audit log, broadcast) |
 | §4.2 Admin document requests | ❌ | ❌ Sve |
-| §5.1 Strike sistem | ✅ Automatika | ❌ Admin `/strikes` lista + unblock endpoint |
-| §5.2 Notifikacije | ⚠️ 6/10 emailova | ❌ cancellation, document_request_approved/rejected, reminder 24h/1h (taskovi postoje ali nisu zakazani) |
-| §5.3 PWA | ❌ | ❌ manifest.json, service worker, push API |
+| §5.1 Strike sistem | ✅ Automatika | ⚠️ Admin `/strikes` stranica je UI-implementirana, ali endpoint još nedostaje (unblock) |
+| §5.2 Notifikacije | ⚠️ 6/10 emailova | ⚠️ `NotificationCenter` UI postoji, polling fallback radi; WS stream čeka backend |
+| §5.3 PWA | ✅ manifest.json, service worker (next-pwa), offline cache, offline indicator | ❌ VAPID / Web Push endpoint |
 
 ### 1.7 Frontend — Stranice
 
-| URL | Fajl | Status |
-|-----|------|--------|
-| `/login` | `app/(auth)/login/page.tsx` | ✅ Puna implementacija (react-hook-form + zod + shadcn) |
-| `/register` | `app/(auth)/register/page.tsx` | ✅ Puna (domain validation) |
-| `/forgot-password` | `app/(auth)/forgot-password/page.tsx` | ⚠️ STUB |
-| `/dashboard` | `app/(student)/dashboard/page.tsx` | ⚠️ STUB |
-| `/search` | `app/(student)/search/page.tsx` | ⚠️ STUB |
-| `/professor/[id]` | `app/(student)/professor/[id]/page.tsx` | ⚠️ STUB |
-| `/appointments/[id]` | `app/(student)/appointments/[id]/page.tsx` | ⚠️ STUB |
-| `/my-appointments` | `app/(student)/my-appointments/page.tsx` | ⚠️ STUB |
-| `/document-requests` | `app/(student)/document-requests/page.tsx` | ⚠️ STUB |
-| `/professor/dashboard` | `app/(professor)/professor/dashboard/page.tsx` | ⚠️ STUB |
-| `/professor/settings` | `app/(professor)/professor/settings/page.tsx` | ⚠️ STUB |
-| `/admin` | `app/(admin)/admin/page.tsx` | ⚠️ STUB |
-| `/admin/users` | `app/(admin)/admin/users/page.tsx` | ⚠️ STUB |
-| `/admin/document-requests` | `app/(admin)/admin/document-requests/page.tsx` | ⚠️ STUB |
-| `/admin/strikes` | `app/(admin)/admin/strikes/page.tsx` | ⚠️ STUB |
-| `/admin/broadcast` | `app/(admin)/admin/broadcast/page.tsx` | ⚠️ STUB |
-| `/admin/audit-log` | `app/(admin)/admin/audit-log/page.tsx` | ⚠️ STUB |
+Legenda (dodatno): 🟢 = UI implementiran i povezan na stvarni backend; 🟡 = UI implementiran, ali se oslanja na backend endpoint koji još ne postoji (videti kolonu "Backend zavisnost").
 
-**Zaključak:** 2/17 stranica je implementirano. 15 STUB-ova.
+| URL | Fajl | Status | Backend zavisnost |
+|-----|------|--------|---------|
+| `/` | `app/page.tsx` | 🟢 redirect na `/login` (middleware obrađuje autentifikovane) | — |
+| `/login` | `app/(auth)/login/page.tsx` | 🟢 Puna implementacija (RHF + zod + shadcn) | `/auth/login` ✅ |
+| `/register` | `app/(auth)/register/page.tsx` | 🟢 Puna (domain validation) | `/auth/register` ✅ |
+| `/forgot-password` | `app/(auth)/forgot-password/page.tsx` | 🟢 | `/auth/forgot-password` ✅ |
+| `/reset-password` | `app/(auth)/reset-password/page.tsx` | 🟢 | `/auth/reset-password` ✅ |
+| `/dashboard` | `app/(student)/dashboard/page.tsx` | 🟢 Kartice: sledeći termini, nepročitane, strike | `/students/appointments` ✅, strikes⚠️ |
+| `/search` | `app/(student)/search/page.tsx` | 🟢 Debounced + filteri | `/students/professors/search` ✅ |
+| `/professor/[id]` | `app/(student)/professor/[id]/page.tsx` | 🟢 Profile + FAQ iznad kalendara + BookingCalendar | `/students/professors/{id}` ✅, slots ✅ |
+| `/appointments/[id]` | `app/(student)/appointments/[id]/page.tsx` | 🟡 UI + polling chat fallback | `/appointments/{id}` ❌ (ROADMAP 3.6) |
+| `/my-appointments` | `app/(student)/my-appointments/page.tsx` | 🟢 Tabs upcoming/history + cancel dialog sa strike warning-om | `/students/appointments` ✅ |
+| `/document-requests` | `app/(student)/document-requests/page.tsx` | 🟡 UI forma + lista | `/students/document-requests` ❌ (ROADMAP 3.6/4.8) |
+| `/professor/dashboard` | `app/(professor)/professor/dashboard/page.tsx` | 🟡 Inbox + kalendar | `/professors/requests` ❌ (ROADMAP 3.7) |
+| `/professor/settings` | `app/(professor)/professor/settings/page.tsx` | 🟡 Profile / FAQ / canned / blackout | `/professors/profile/faq/canned/...` ❌ (ROADMAP 3.7) |
+| `/admin` | `app/(admin)/admin/page.tsx` | 🟡 Metrics kartice | `/admin/*` ❌ (ROADMAP 4.7) |
+| `/admin/users` | `app/(admin)/admin/users/page.tsx` | 🟡 Tabela + bulk import + per-row akcije | `/admin/users` ❌ (ROADMAP 4.7) |
+| `/admin/document-requests` | `app/(admin)/admin/document-requests/page.tsx` | 🟡 Tabs po statusu + approve/reject dialozi | `/admin/document-requests` ❌ (ROADMAP 4.8) |
+| `/admin/strikes` | `app/(admin)/admin/strikes/page.tsx` | 🟡 Tabela + unblock dugme | `/admin/strikes` ❌ (ROADMAP 4.7) |
+| `/admin/broadcast` | `app/(admin)/admin/broadcast/page.tsx` | 🟡 Forma + history | `/admin/broadcast` ❌ (ROADMAP 4.7) |
+| `/admin/audit-log` | `app/(admin)/admin/audit-log/page.tsx` | 🟡 Tabela sa filterima | `/admin/audit-log` ❌ (ROADMAP 4.7) |
+
+**Zaključak:** 19/19 stranica ima kompletan UI. 9/19 je 🟢 (povezano na live backend), 10/19 je 🟡 (čeka se Stefanov backend da bi postalo 🟢; axios wrappers, tipovi, hooks, forme i table su već napisani).
 
 ### 1.8 Frontend — Komponente
 
 | Komponenta | Lokacija | Status |
 |-----------|----------|--------|
-| `Button`, `Card`, `Form`, `Input`, `Label` | `components/ui/` | ✅ Shadcn/ui bazne komponente |
-| `<BookingCalendar />` | — | ❌ Ne postoji |
-| `<AvailabilityCalendar />` | — | ❌ Ne postoji |
-| `<AppointmentRequestForm />` | — | ❌ Ne postoji |
-| `<TicketChat />` | — | ❌ Ne postoji |
-| `<StrikeDisplay />` | — | ❌ Ne postoji |
-| `<WaitlistButton />` | — | ❌ Ne postoji |
-| `<NotificationCenter />` | — | ❌ Ne postoji |
-| `<BulkImportModal />` | — | ❌ Ne postoji |
-| `<AuditLogTable />` | — | ❌ Ne postoji |
-| `<DocumentRequestForm />` | — | ❌ Ne postoji |
-| `<DocumentRequestCard />` | — | ❌ Ne postoji |
-| `<DocumentRequestAdminRow />` | — | ❌ Ne postoji |
-| `<ImpersonationBanner />` | — | ❌ Ne postoji |
-| `<AppSidebar />` / layout shell | — | ❌ Ne postoji (layouti `(student)`/`(professor)`/`(admin)` su prazni `<>`) |
-| Dodatne shadcn komponente (Dialog, Sheet, Select, Dropdown, Tabs, Toast, Avatar, Scroll-Area, ...) | — | ❌ Paketi su u `package.json`, nisu generisane wrap-komponente u `components/ui/` |
+| Shadcn primitivi (Button, Card, Form, Input, Label, Dialog, Sheet, Select, Dropdown, Tabs, Toast/Sonner, Avatar, Scroll-Area, Accordion, Tooltip, Switch, Badge, Popover, RadioGroup, Calendar/DayPicker, Command, AlertDialog, Separator) | `components/ui/` | ✅ |
+| `<AppShell />`, `<Sidebar />`, `<TopBar />`, `<UserMenu />`, `<PageHeader />`, `<EmptyState />`, `<FacultyBadge />`, `<RoleGate />`, `<ProtectedPage />` | `components/shared/` | ✅ |
+| `<ImpersonationBanner />`, `<OfflineIndicator />` | `components/shared/` | ✅ |
+| `<StrikeDisplay />`, `<WaitlistButton />` | `components/shared/` | ✅ |
+| `<BookingCalendar />`, `<CalendarLegend />`, `<SlotPopover />` | `components/calendar/` | ✅ |
+| `<AvailabilityCalendar />`, `<RecurringRuleModal />` | `components/calendar/` | ✅ |
+| `<AppointmentCard />`, `<AppointmentStatusBadge />`, `<AppointmentCancelDialog />`, `<AppointmentRequestForm />`, `<AppointmentDetailHeader />`, `<ParticipantList />`, `<ParticipantRow />`, `<FileList />`, `<FileUploadZone />` | `components/appointments/` | ✅ |
+| `<TicketChat />`, `<ChatMessage />`, `<ChatInput />`, `<ChatMessageCounter />`, `<ChatClosedNotice />` | `components/chat/` | ✅ (polling fallback) |
+| `<ProfessorSearchCard />`, `<ProfessorProfileHeader />`, `<ProfessorSubjectsList />`, `<ProfessorFaqAccordion />` | `components/student/` | ✅ |
+| `<RequestsInbox />`, `<RequestInboxRow />`, tri dialog-a (approve/reject/delegate), `<ProfileForm />`, `<AreasOfInterestInput />`, `<FaqList />` + `<FaqItemRow />` + `<FaqFormDialog />`, `<CannedResponseList />` + `<CannedResponseFormDialog />`, `<BlackoutManager />` | `components/professor/` | ✅ |
+| `<AdminDashboardMetrics />`, `<UsersTable />`, `<UserFormModal />`, `<BulkImportDialog />`, `<StrikesTable />`, `<AuditLogTable />`, `<BroadcastForm />` | `components/admin/` | ✅ |
+| `<NotificationCenter />`, `<NotificationItem />`, `<NotificationStream />`, `<PushSubscriptionToggle />` (disabled stub) | `components/notifications/` | ✅ |
+| `<DocumentRequestForm />`, `<DocumentRequestList />`, `<AdminRequestRow />`, `<ApproveDialog />`, `<RejectDialog />` | `components/document-requests/` | ✅ |
 
 ### 1.9 Frontend — API klijenti, storovi, hooks, tipovi
 
@@ -172,18 +173,25 @@ Legenda: ✅ radi • ⚠️ djelimično / stub / bug • ❌ ne postoji
 |-------|------|--------|
 | Axios + JWT interceptor | `lib/api.ts` | ✅ Refresh queue, auto-logout na 401 |
 | `authApi` | `lib/api/auth.ts` | ✅ |
-| `studentsApi` (search, professor profile, slots, appointments, waitlist) | — | ❌ |
-| `professorsApi` (profile, slots, requests, canned, crm, faq) | — | ❌ |
-| `appointmentsApi` (detail, messages, files, participants) | — | ❌ |
-| `adminApi` (users, impersonate, strikes, broadcast, audit, documents) | — | ❌ |
-| `documentRequestsApi` | — | ❌ |
-| `notificationsApi` | — | ❌ |
-| `searchApi` (Google PSE) | — | ❌ |
+| `studentsApi` (search, professor profile, slots, appointments, waitlist) | `lib/api/students.ts` | ✅ |
+| `professorsApi` (profile, slots, requests, canned, crm, faq) | `lib/api/professors.ts` | ✅ |
+| `appointmentsApi` (detail, messages, files, participants) | `lib/api/appointments.ts` | ✅ (čeka backend da stvarno radi) |
+| `adminApi` (users, impersonate, strikes, broadcast, audit, documents) | `lib/api/admin.ts` | ✅ (čeka backend) |
+| `documentRequestsApi` | `lib/api/document-requests.ts` | ✅ (čeka backend) |
+| `notificationsApi` | `lib/api/notifications.ts` | ✅ (čeka backend) |
+| `searchApi` (Google PSE) | — | ❌ Preskočeno u Fazi 6 (backend 5.1 nije isporučen); `GlobalSearchBox` je disabled sa tooltipom "Dostupno uskoro" |
 | `useAuthStore` | `lib/stores/auth.ts` | ✅ |
-| `useNotificationStore` (WS + counter) | — | ❌ |
-| `useImpersonationStore` (banner state) | — | ❌ |
-| TanStack Query hooks (`lib/hooks/`) | — | ❌ Folder ne postoji; treba `useMyAppointments`, `useProfessorSearch`, `useProfessorProfile`, `useSlots`, `useRequestsInbox`, `useDocumentRequests`, `useNotifications`, itd. |
-| TypeScript tipovi | `types/auth.ts` | ⚠️ Samo auth. Nedostaju `types/professor.ts`, `types/appointment.ts`, `types/admin.ts`, `types/document-request.ts`, `types/notification.ts`, `types/chat.ts` |
+| `useNotificationStore` (WS + counter) | `lib/stores/notification-ws-status.ts` + `lib/hooks/use-notifications.ts` | ✅ (polling fallback; WS spreman za aktivaciju kad backend 4.2 stigne) |
+| `useImpersonationStore` (banner state) | `lib/stores/impersonation.ts` + `lib/hooks/use-impersonation.ts` | ✅ |
+| TanStack Query hooks (`lib/hooks/`) | `lib/hooks/` | ✅ `use-professors`, `use-appointments`, `use-availability`, `use-requests-inbox`, `use-document-requests`, `use-notifications`, `use-admin-users`, `use-strikes`, `use-audit-log`, `use-chat`, `use-impersonation` |
+| TypeScript tipovi | `types/` | ✅ `auth`, `professor`, `appointment`, `admin`, `document-request`, `notification`, `chat`, `ws`, `common`, barrel `index.ts` |
+| WebSocket klijenti | `lib/ws/` | ✅ `notification-socket.ts` (live), `chat-socket.ts` (pripremljen, koristi polling do backend 4.1) |
+| JWT util | `lib/utils/jwt.ts` | ✅ (decode access tokena za WS query param) |
+| PWA manifest + next-pwa config | `public/manifest.json`, `next.config.mjs` | ✅ |
+| PWA ikonice (192/512/maskable + apple-touch + favicons) | `public/icons/` | ✅ Generisano preko `npm run generate:icons` (skripta u `scripts/generate-icons.mjs`) |
+| Offline indicator | `components/shared/offline-indicator.tsx` | ✅ |
+| Push subscription toggle | `components/notifications/push-subscription-toggle.tsx` | ✅ Disabled stub (čeka backend VAPID) |
+| Playwright E2E | `frontend/playwright.config.ts`, `frontend/e2e/` | ✅ smoke + auth + student-search + professor-view; `student-booking` / `professor-approve` / `admin-bulk-import` / `strike-system` deferovani dok backend ne stigne |
 
 ### 1.10 Infrastruktura
 
@@ -200,7 +208,7 @@ Legenda: ✅ radi • ⚠️ djelimično / stub / bug • ❌ ne postoji
 | `.env.example` (backend + frontend) | — | ✅ |
 | `docker-compose.prod.yml` | — | ❌ |
 | SSL/TLS + Let's Encrypt | — | ❌ |
-| PWA (manifest.json + service worker) | — | ❌ |
+| PWA (manifest.json + service worker) | `frontend/public/manifest.json`, `frontend/next.config.mjs` (next-pwa) | ✅ (bez push — čeka backend VAPID) |
 | Rate limiting (nginx `limit_req` ili FastAPI middleware) | — | ❌ |
 | Postman/Insomnia kolekcija | `docs/api-collection.json` | ❌ |
 | CI/CD (GitHub Actions) | `.github/workflows/` | ❌ |
@@ -889,11 +897,92 @@ Implementacija svih 6 admin stranica — sve su trenutno STUB.
 
 ### Korak 5.4 — Testovi + performance [BACKEND] [FRONTEND] — **MEDIUM**
 
-- Backend: pytest-asyncio integracioni testovi za: booking (Redis lock concurrency), strike flow, waitlist offer, document requests.
-- Frontend: Playwright E2E za: student booking journey, professor approve flow, admin bulk import.
-- Load test: Locust ili k6 — 100 simultanih studenata zakazuju isti slot → nijedan double booking.
+- Backend: pytest-asyncio integracioni testovi za: booking (Redis lock concurrency), strike flow, waitlist offer, document requests. ❌ (Stefan)
+- Frontend: Playwright E2E za: student booking journey, professor approve flow, admin bulk import. ⚠️ Scaffold je postavljen u Fazi 6 (`frontend/e2e/`, `playwright.config.ts`); specovi koji zahtevaju backend endpoint-e su deferovani (ROADMAP 3.6/3.7/4.7/4.8) — videti `frontend/e2e/README.md`.
+- Load test: Locust ili k6 — 100 simultanih studenata zakazuju isti slot → nijedan double booking. ❌ (Stefan)
 
 **Procena:** 2 dana
+
+---
+
+## FAZA 6 — Frontend finish (zatvaranje pre produkcije)
+
+**Cilj:** Finalni frontend polish, PWA, offline, E2E scaffold, SEO, dokumentacija. Sve što ne zavisi od nedovršenih backend modula je ✅; sve što zavisi je jasno markirano kao blocker.
+
+**Status:** ✅ završeno za deo koji je Filipov (frontend). Blocker-i idu Stefanu.
+
+---
+
+### Korak 6.1 — Pre-flight cleanup [FRONTEND] — **DONE**
+
+- Audit `// TODO: backend endpoint not yet implemented` komentara (oni koji su još validni ostavljeni; ostali obrisani).
+- `npx tsc --noEmit`: ✅ pass.
+- `npm run build`: ✅ pass (Next 14, next-pwa SW generisan).
+- ESLint konfigurisan (`frontend/.eslintrc.json`, `next/core-web-vitals` preset).
+
+---
+
+### Korak 6.2 — Google PSE proxy UI [FRONTEND] — **BLOCKED**
+
+Preskočeno jer `backend/app/api/v1/search.py` još ne postoji (ROADMAP 5.1, Stefan). `GlobalSearchBox` je ostavljen disabled sa tooltipom "Dostupno uskoro".
+
+---
+
+### Korak 6.3 — PWA [FRONTEND] — **DONE**
+
+- `public/manifest.json` sa punom specifikacijom (start_url `/dashboard`, scope `/`, lang `sr-Latn`, tema `#0f172a`).
+- `scripts/generate-icons.mjs` (sharp) generiše sve potrebne veličine (192/512/maskable + apple-touch + favicon 16/32) — reproduktabilno preko `npm run generate:icons`.
+- `next-pwa` konfigurisan u `next.config.mjs`: register + skipWaiting + reloadOnOnline; disabled u dev-u. Runtime caching:
+  - Google Fonts: CacheFirst.
+  - `/_next/static/*` i `/icons/*`: CacheFirst.
+  - `/api/v1/students/appointments*` i `/api/v1/notifications*`: NetworkFirst sa 3s timeout-om (offline arhiva ~24h, max 40 unosa).
+  - Navigacija: NetworkFirst.
+- `components/shared/offline-indicator.tsx` montiran u `AppShell` (banner na `navigator.onLine === false`).
+- `components/notifications/push-subscription-toggle.tsx` dodat u `UserMenu` kao **disabled stub** sa tooltipom — aktivirati jednom kad backend `POST /api/v1/notifications/subscribe` + VAPID stigne.
+- `app/layout.tsx` — kompletan PWA meta set (manifest, theme-color, apple-web-app, favicons, apple-touch-icon, viewport).
+
+---
+
+### Korak 6.4 — Chat WebSocket migracija [FRONTEND] — **BLOCKED**
+
+`backend/app/api/v1/appointments.py` još nema `@router.websocket("/{id}/chat")` (ROADMAP 4.1, Stefan). `lib/ws/chat-socket.ts` je pripremljen prema `docs/websocket-schema.md` §5, ali `TicketChat` i dalje koristi polling fallback iz Faze 3. Aktivira se prebacivanjem `use-chat` na WS klijent jednom kada backend endpoint stigne.
+
+---
+
+### Korak 6.5 — NotificationStream go-live [FRONTEND] — **BLOCKED**
+
+`backend/app/api/v1/notifications.py` ne postoji (ROADMAP 4.2, Stefan). `lib/ws/notification-socket.ts` i `notification-stream.tsx` su već napisani u Fazi 5; `use-notifications` trenutno koristi polling (30s). Aktivira se automatski kad backend WS endpoint stigne (connection status store `lib/stores/notification-ws-status.ts` već prati stanje).
+
+---
+
+### Korak 6.6 — E2E testovi [FRONTEND] — **PARTIAL**
+
+Playwright scaffold je postavljen (`frontend/playwright.config.ts`, `frontend/e2e/fixtures/`, `frontend/e2e/tests/`, `.gitignore` ažuriran, `package.json` skripte: `test:e2e`, `test:e2e:ui`, `test:e2e:headed`). Projekti: `chromium` + `mobile-chrome` (Pixel 5). Retries 2 na CI.
+
+**Implementirani specovi (prolaze protiv živog backend-a):**
+- `smoke.spec.ts` — middleware redirecti, login/register/forgot-password rendering, PWA manifest (filesystem check).
+- `auth.spec.ts` — validacija formi, pogrešni kredencijali, uspešan student login + logout.
+- `student-search.spec.ts` — debounced professor search, filteri, reset.
+- `professor-view.spec.ts` — FAQ iznad kalendara asercija na `/professor/[id]`.
+
+**Deferovani specovi (čekaju backend):**
+- `student-booking.spec.ts` → čeka `GET /appointments/{id}` (ROADMAP 3.6).
+- `professor-approve.spec.ts` → čeka `GET/POST /professors/requests` (ROADMAP 3.7).
+- `admin-bulk-import.spec.ts` → čeka `POST /admin/users/bulk-import` (ROADMAP 4.7).
+- `strike-system.spec.ts` → čeka `GET /students/appointments` sa strike fieldovima + admin strikes endpoint.
+
+**E2E seed:** za sada se testovi oslanjaju na `scripts/seed_db.py` (credentials u `frontend/e2e/fixtures/auth.ts`). Dedicated `scripts/seed_e2e.py` treba da pokrije: (a) tri test user-a po roli sa fiksnim lozinkama, (b) minimalno 3 profesora sa FAQ entrijima, (c) slot < 24h za strike test, (d) CSV sa 5 validnih + 2 duplikata + 1 invalid domen za bulk-import test.
+
+---
+
+### Korak 6.7 — Finalni polish [FRONTEND] — **DONE**
+
+- Svaka stranica ima: Skeleton/Spinner tokom load-a, `EmptyState` za praznu listu, error toast + retry handling u `lib/api.ts` interceptoru.
+- A11y: sva dugmad imaju accessible ime (lucide ikone praćene `aria-label` ili labelom), forme koriste `<Label>` iz shadcn-a, dialozi i dropdown-ovi zatvaraju Escape-om (shadcn default), focus trap u modalima.
+- Mobile (375px): sidebar kolapsira u `Sheet`, search i my-appointments rade, FullCalendar prelazi u list view (breakpoint prop).
+- Performance: `dynamic()` za FullCalendar i WS komponente, `next/image` za logo/avatare, bez premature `React.memo`.
+- SEO: `app/page.tsx` redirect na `/login` (middleware odlučuje za authenticated), `app/(auth)/login/layout.tsx` + `register/layout.tsx` imaju metadata sa title/description/robots.
+- Dokumentacija: `frontend/README.md` (setup, env, skripte, PWA, E2E, produkcijski checklist); ovaj `ROADMAP.md` ažuriran u sekcijama 1.6/1.7/1.8/1.9/1.10.
 
 ---
 

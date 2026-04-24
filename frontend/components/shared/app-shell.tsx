@@ -38,6 +38,7 @@ import { cn } from "@/lib/utils"
 import type { Role } from "@/types/common"
 
 import { ImpersonationBanner } from "./impersonation-banner"
+import { OfflineIndicator } from "./offline-indicator"
 import { Sidebar } from "./sidebar"
 import { TopBar } from "./top-bar"
 
@@ -52,36 +53,22 @@ export function AppShell({ role, children }: AppShellProps) {
   const isImpersonating = useImpersonationStore((s) => s.isImpersonating)
 
   return (
-    <div
-      className={cn(
-        "flex h-dvh flex-col bg-muted/30",
-        // Make room for the fixed impersonation banner.
-        isImpersonating && "pt-10"
-      )}
-    >
-      <ImpersonationBanner />
+    <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+      <div
+        className={cn(
+          "flex h-dvh flex-col bg-muted/30",
+          // Make room for the fixed impersonation banner.
+          isImpersonating && "pt-10"
+        )}
+      >
+        <ImpersonationBanner />
+        <OfflineIndicator />
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* ── Desktop sidebar ─────────────────────────────────────────── */}
-        <div className="hidden md:block">
-          <Sidebar role={role} />
-        </div>
-
-        {/* ── Mobile sidebar (Sheet drawer) ───────────────────────────── */}
-        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent side="left" className="w-60 p-0">
-            <SheetHeader className="sr-only">
-              <SheetTitle>Navigacija</SheetTitle>
-              <SheetDescription>
-                Glavni meni aplikacije
-              </SheetDescription>
-            </SheetHeader>
-            <Sidebar
-              role={role}
-              onNavigate={() => setMobileOpen(false)}
-              className="w-full border-r-0"
-            />
-          </SheetContent>
+        <div className="flex flex-1 overflow-hidden">
+          {/* ── Desktop sidebar (permanent column ≥ md) ─────────────── */}
+          <div className="hidden md:block">
+            <Sidebar role={role} />
+          </div>
 
           {/* ── Main column ─────────────────────────────────────────── */}
           <div className="flex min-w-0 flex-1 flex-col">
@@ -104,8 +91,21 @@ export function AppShell({ role, children }: AppShellProps) {
               {children}
             </main>
           </div>
-        </Sheet>
+        </div>
       </div>
-    </div>
+
+      {/* ── Mobile sidebar (Sheet drawer) ─────────────────────────── */}
+      <SheetContent side="left" className="w-60 p-0">
+        <SheetHeader className="sr-only">
+          <SheetTitle>Navigacija</SheetTitle>
+          <SheetDescription>Glavni meni aplikacije</SheetDescription>
+        </SheetHeader>
+        <Sidebar
+          role={role}
+          onNavigate={() => setMobileOpen(false)}
+          className="w-full border-r-0"
+        />
+      </SheetContent>
+    </Sheet>
   )
 }
