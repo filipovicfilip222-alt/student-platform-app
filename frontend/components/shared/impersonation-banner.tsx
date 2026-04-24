@@ -2,19 +2,29 @@
  * impersonation-banner.tsx — Sticky red banner shown while an ADMIN is
  * viewing the app as another user.
  *
- * ROADMAP 2.2 / §3.6 Impersonation flow.
+ * ROADMAP 2.2 / 4.4 + docs/FRONTEND_STRUKTURA.md §3.6 +
+ * docs/websocket-schema.md §6.
  *
  * Logic:
  *  - Reads `useImpersonationStore` for the active impersonation session.
- *  - When `isImpersonating === true`, renders a fixed banner on top of
- *    the entire viewport with the impersonated user's name + an "Izađi"
- *    action that calls `useEndImpersonation`.
- *  - `AppShell` adds `pt-10` to the layout when the banner is visible so
- *    content doesn't hide behind it.
+ *    Admin email + name come from the `imp_email` / `imp_name` claims on
+ *    the impersonation JWT (stored there by `useStartImpersonation`).
+ *  - Renders a fixed banner on top of the entire viewport with the
+ *    impersonated user's name + an "Izađi" action that calls
+ *    `useEndImpersonation` (which POSTs /admin/impersonate/end).
+ *  - AppShell adds `pt-10` to the layout when the banner is visible so
+ *    content does not hide behind it.
+ *
+ * Self-healing: if the access token in the auth store silently loses
+ * its `imp` claim (e.g. impersonation token expired → axios interceptor
+ * refreshed us back to a plain admin token), we clear the impersonation
+ * store so the banner stops showing. Backend stays authoritative — the
+ * banner only reflects what the current token claims.
  */
 
 "use client"
 
+import { useEffect } from "react"
 import { ShieldAlert } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -22,21 +32,44 @@ import { useEndImpersonation } from "@/lib/hooks/use-impersonation"
 import { useAuthStore } from "@/lib/stores/auth"
 import { useImpersonationStore } from "@/lib/stores/impersonation"
 import { toastApiError } from "@/lib/utils/errors"
+import { isImpersonationToken } from "@/lib/utils/jwt"
 
 export function ImpersonationBanner() {
   const isImpersonating = useImpersonationStore((s) => s.isImpersonating)
+  const storedAdminName = useImpersonationStore((s) => s.adminName)
   const originalUser = useImpersonationStore((s) => s.originalUser)
+  const clearImpersonation = useImpersonationStore((s) => s.clearImpersonation)
+
   const currentUser = useAuthStore((s) => s.user)
+  const accessToken = useAuthStore((s) => s.accessToken)
+
   const endImpersonation = useEndImpersonation()
+
+  // Self-heal: if the active token no longer carries the `imp` claim
+  // (e.g. impersonation expired → /auth/refresh gave us the admin token
+  // back), clear the banner state. Keeps UI in sync with the backend
+  // authoritative RBAC.
+  useEffect(() => {
+    if (!isImpersonating) return
+    if (!accessToken) return
+    if (!isImpersonationToken(accessToken)) {
+      clearImpersonation()
+    }
+  }, [isImpersonating, accessToken, clearImpersonation])
 
   if (!isImpersonating) return null
 
   const impersonatedName = currentUser
     ? `${currentUser.first_name} ${currentUser.last_name}`.trim()
     : "—"
-  const adminName = originalUser
-    ? `${originalUser.first_name} ${originalUser.last_name}`.trim()
-    : "Admin"
+  // Prefer the `imp_name` claim stored in the impersonation store (§6.2);
+  // fall back to the pre-swap admin UserResponse if the claim was missing.
+  const adminName =
+    storedAdminName && storedAdminName.length > 0
+      ? storedAdminName
+      : originalUser
+        ? `${originalUser.first_name} ${originalUser.last_name}`.trim()
+        : "Admin"
 
   async function handleExit() {
     try {
@@ -56,7 +89,7 @@ export function ImpersonationBanner() {
         <span className="truncate">
           ADMIN MODE — Impersonirate <strong>{impersonatedName}</strong>
           <span className="ml-1 hidden text-red-100 sm:inline">
-            (prijavljeni kao {adminName})
+            • Admin: {adminName}
           </span>
         </span>
       </div>

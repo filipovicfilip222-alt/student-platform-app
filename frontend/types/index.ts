@@ -19,6 +19,7 @@ export type {
   TokenResponse,
   UserResponse,
 } from "./auth"
+export * from "./chat"
 export * from "./common"
 export * from "./document-request"
 export * from "./notification"

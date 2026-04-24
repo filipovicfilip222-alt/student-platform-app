@@ -3,7 +3,8 @@
  *
  * ROADMAP 3.6 explicitly allows 2s polling on GET /appointments/{id}/messages
  * until ROADMAP 4.1 ships the WebSocket migration. When that lands, swap the
- * `refetchInterval` out for a socket.io subscription that invalidates this key.
+ * `refetchInterval` out for a native-WS subscription (lib/ws/chat-socket.ts)
+ * that invalidates this key — see docs/websocket-schema.md §5 + §8.2.
  *
  * TODO: backend endpoint not yet implemented (ROADMAP 3.6).
  */

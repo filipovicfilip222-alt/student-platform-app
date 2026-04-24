@@ -22,6 +22,7 @@ import type {
   DocumentRequestReject,
   DocumentRequestResponse,
   DocumentStatus,
+  ImpersonationEndResponse,
   ImpersonationStartResponse,
   MessageResponse,
   StrikeRow,
@@ -85,16 +86,19 @@ export const adminApi = {
   },
 
   // ── Impersonation ───────────────────────────────────────────────────────
+  // Endpoints + response shape fixed by docs/websocket-schema.md §6.1.
+  // TTL is 30 min (expires_in: 1800), no refresh — on 401 the admin must
+  // re-impersonate from the users table.
   impersonateStart: (userId: Uuid) =>
     api
       .post<ImpersonationStartResponse>(
-        `/admin/users/${userId}/impersonate`
+        `/admin/impersonate/${userId}`
       )
       .then((r) => r.data),
 
   impersonateEnd: () =>
     api
-      .post<ImpersonationStartResponse>("/admin/impersonate/end")
+      .post<ImpersonationEndResponse>("/admin/impersonate/end")
       .then((r) => r.data),
 
   // ── Strikes & blocks ────────────────────────────────────────────────────

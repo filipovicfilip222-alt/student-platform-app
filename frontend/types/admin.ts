@@ -134,11 +134,37 @@ export interface BroadcastResponse {
 }
 
 // ── Impersonation ────────────────────────────────────────────────────────────
+// Source: docs/websocket-schema.md §6.1. TTL is 30 minutes
+// (`expires_in: 1800`); no refresh token for the impersonation scope — admin
+// re-impersonates on expiry.
+
+export interface ImpersonatorSummary {
+  id: Uuid
+  email: string
+  first_name: string
+  last_name: string
+}
 
 export interface ImpersonationStartResponse {
-  /** New JWT access token carrying the `imp` claim. */
+  /** New JWT access token carrying the `imp` / `imp_email` / `imp_name` claims. */
   access_token: string
   token_type: "bearer"
+  /** Seconds until the impersonation token expires (1800 per §6.1). */
+  expires_in: number
+  /** The impersonated user — becomes the `sub` of the new token. */
+  user: UserResponse
+  /** The originating admin (also encoded into `imp` claim). */
+  impersonator: ImpersonatorSummary
+  /** ISO-8601 UTC instant at which the impersonation token expires. */
+  imp_expires_at: IsoDateTime
+}
+
+/** Shape of POST /admin/impersonate/end — restores the admin session. */
+export interface ImpersonationEndResponse {
+  access_token: string
+  token_type: "bearer"
+  expires_in: number
+  /** The original admin's UserResponse. */
   user: UserResponse
 }
 
