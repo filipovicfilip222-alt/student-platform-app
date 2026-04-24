@@ -104,6 +104,8 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis_pass}@redis:6379/0
     env_file:
       - ../backend/.env
+    volumes:
+      - ../backend:/app
     ports:
       - "8000:8000"
     depends_on:
@@ -111,6 +113,58 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - studentska_net
+    profiles:
+      - app
+
+  celery-worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: studentska_celery_worker
+    restart: unless-stopped
+    command: celery -A app.celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-studentska}:${POSTGRES_PASSWORD:-studentska_pass}@postgres:5432/${POSTGRES_DB:-studentska_platforma}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_pass}@redis:6379/0
+    env_file:
+      - ../backend/.env
+    volumes:
+      - ../backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    networks:
+      - studentska_net
+    profiles:
+      - app
+
+  celery-beat:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: studentska_celery_beat
+    restart: unless-stopped
+    command: celery -A app.celery_app beat --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-studentska}:${POSTGRES_PASSWORD:-studentska_pass}@postgres:5432/${POSTGRES_DB:-studentska_platforma}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_pass}@redis:6379/0
+    env_file:
+      - ../backend/.env
+    volumes:
+      - ../backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      celery-worker:
+        condition: service_started
     networks:
       - studentska_net
     profiles:
