@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 
 from app.core.config import settings
-from app.api.v1 import auth
+from app.api.v1 import auth, professors, students
 
 # ── Future router imports (uncomment as features are built) ───────────────────
 # from app.api.v1 import users, students, professors, appointments
@@ -42,8 +42,8 @@ app.add_middleware(
 # ── Routers ────────────────────────────────────────────────────────────────────
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 # app.include_router(users.router,          prefix="/api/v1/users",         tags=["Users"])
-# app.include_router(students.router,       prefix="/api/v1/students",      tags=["Students"])
-# app.include_router(professors.router,     prefix="/api/v1/professors",    tags=["Professors"])
+app.include_router(students.router,       prefix="/api/v1/students",      tags=["Students"])
+app.include_router(professors.router,     prefix="/api/v1/professors",    tags=["Professors"])
 # app.include_router(appointments.router,   prefix="/api/v1/appointments",  tags=["Appointments"])
 # app.include_router(admin.router,          prefix="/api/v1/admin",         tags=["Admin"])
 # app.include_router(search.router,         prefix="/api/v1/search",        tags=["Search"])
