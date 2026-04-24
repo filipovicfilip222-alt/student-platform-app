@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 
 // Routes that don't require authentication
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password"]
+const PUBLIC_PATHS = [
+  "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+]
 
 // Routes that require a specific role (checked in route group layouts,
 // middleware only checks that a session cookie exists)
