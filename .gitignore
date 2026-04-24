@@ -19,6 +19,13 @@ venv/
 env/
 ENV/
 
+# Celery beat runtime artifacts
+celerybeat-schedule
+celerybeat-schedule.*
+backend/celerybeat-schedule
+backend/celerybeat-schedule.*
+celerybeat.pid
+
 # Environment variables — NEVER commit real .env files
 backend/.env
 backend/.env.local
