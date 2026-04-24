@@ -171,3 +171,34 @@ export interface SubjectResponse {
   faculty: Faculty
   professor_id: Uuid | null
 }
+
+// ── Professor self-profile (ROADMAP 3.7) ─────────────────────────────────────
+// TODO: sync with backend when schema is implemented. Mirrors
+//       ProfessorProfileResponse but represents the signed-in professor's own
+//       view (editable fields only, no `available_slots`).
+
+export interface ProfessorMeResponse {
+  id: Uuid
+  full_name: string
+  email: string
+  title: string
+  department: string
+  office: string | null
+  office_description: string | null
+  faculty: Faculty
+  areas_of_interest: string[]
+  auto_approve_recurring: boolean
+  auto_approve_special: boolean
+  buffer_minutes: number
+  faq: FaqResponse[]
+}
+
+// ── Assistants assigned to the professor (ROADMAP 3.7, delegate flow) ────────
+// TODO: sync with backend when schema is implemented.
+
+export interface AssistantOption {
+  id: Uuid
+  full_name: string
+  email: string
+  subjects: string[]
+}

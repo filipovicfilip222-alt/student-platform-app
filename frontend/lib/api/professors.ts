@@ -11,6 +11,7 @@
 
 import api from "@/lib/api"
 import type {
+  AssistantOption,
   BlackoutCreateRequest,
   BlackoutResponse,
   CannedResponseCreate,
@@ -21,6 +22,7 @@ import type {
   FaqCreate,
   FaqResponse,
   FaqUpdate,
+  ProfessorMeResponse,
   ProfessorProfileUpdate,
   SlotCreateRequest,
   SlotResponse,
@@ -99,9 +101,22 @@ export const professorsApi = {
 
   // ── Profile settings ────────────────────────────────────────────────────
   // TODO: backend endpoint not yet implemented (ROADMAP 3.7)
+  getMyProfile: () =>
+    api
+      .get<ProfessorMeResponse>("/professors/profile")
+      .then((r) => r.data),
+
+  // TODO: backend endpoint not yet implemented (ROADMAP 3.7)
   updateProfile: (data: ProfessorProfileUpdate) =>
     api
-      .patch<void>("/professors/profile", data)
+      .patch<ProfessorMeResponse>("/professors/profile", data)
+      .then((r) => r.data),
+
+  // ── Assistants assigned to this professor's subjects ────────────────────
+  // TODO: backend endpoint not yet implemented (ROADMAP 3.7 — delegate flow)
+  listAssistants: () =>
+    api
+      .get<AssistantOption[]>("/professors/assistants")
       .then((r) => r.data),
 
   // ── FAQ ─────────────────────────────────────────────────────────────────
