@@ -197,7 +197,14 @@ async def create_appointment(
         )
         db.add(participant)
         await db.flush()
-        await db.refresh(appointment)
+        await db.commit()
+
+        result = await db.execute(
+            select(Appointment)
+            .options(selectinload(Appointment.slot))
+            .where(Appointment.id == appointment.id)
+        )
+        appointment = result.scalar_one()
 
         if appointment.status == AppointmentStatus.APPROVED:
             from app.tasks.notifications import send_appointment_confirmed

@@ -105,9 +105,12 @@ async def search_professors(
         subject_names = sorted({s.name for s in professor.subjects if s.name})
 
         slot_types_result = await db.execute(
-            _available_slots_query(professor.id)
-            .where(AvailabilitySlot.slot_datetime >= now_utc)
-            .with_only_columns(AvailabilitySlot.consultation_type)
+            select(AvailabilitySlot.consultation_type)
+            .where(
+                AvailabilitySlot.professor_id == professor.id,
+                AvailabilitySlot.is_available.is_(True),
+                AvailabilitySlot.slot_datetime >= now_utc,
+            )
             .distinct()
         )
         consultation_types = [row[0] for row in slot_types_result.all()]
