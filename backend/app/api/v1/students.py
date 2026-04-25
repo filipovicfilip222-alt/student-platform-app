@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query
 from app.core.dependencies import CurrentStudent, DBSession, RedisClient
 from app.models.enums import ConsultationType, Faculty
 from app.schemas.auth import MessageResponse
+from app.schemas.document_request import DocumentRequestCreate, DocumentRequestResponse
 from app.schemas.student import (
     AppointmentCancelResponse,
     AppointmentCreateRequest,
@@ -15,7 +16,12 @@ from app.schemas.student import (
     ProfessorProfileResponse,
     ProfessorSearchResponse,
 )
-from app.services import booking_service, search_service, waitlist_service
+from app.services import (
+    booking_service,
+    document_request_service,
+    search_service,
+    waitlist_service,
+)
 
 router = APIRouter()
 
@@ -173,3 +179,31 @@ async def leave_waitlist(
 ) -> MessageResponse:
     await waitlist_service.leave_waitlist(db, redis, current_user, slot_id)
     return MessageResponse(message="Uspešno ste se odjavili sa waitlist-e.")
+
+
+@router.post(
+    "/document-requests",
+    response_model=DocumentRequestResponse,
+    status_code=201,
+    summary="Kreiranje zahteva za dokument",
+)
+async def create_document_request(
+    data: DocumentRequestCreate,
+    db: DBSession,
+    current_user: CurrentStudent,
+) -> DocumentRequestResponse:
+    item = await document_request_service.create_as_student(db, current_user, data)
+    return DocumentRequestResponse.model_validate(item)
+
+
+@router.get(
+    "/document-requests",
+    response_model=list[DocumentRequestResponse],
+    summary="Moji zahtevi za dokumente",
+)
+async def list_my_document_requests(
+    db: DBSession,
+    current_user: CurrentStudent,
+) -> list[DocumentRequestResponse]:
+    items = await document_request_service.list_my(db, current_user)
+    return [DocumentRequestResponse.model_validate(item) for item in items]

@@ -10,6 +10,7 @@ from app.core.database import AsyncSessionLocal
 from app.core.email import send_generic_notification_email
 from app.models.appointment import Appointment
 from app.models.availability_slot import AvailabilitySlot
+from app.models.enums import DocumentType
 from app.models.professor import Professor
 from app.models.user import User
 
@@ -169,6 +170,68 @@ def send_waitlist_offer(student_id: str, slot_id: str, expires_at: str) -> bool:
                     f"<p>Otvorilo se mesto kod profesora <strong>{professor_name}</strong>.</p>"
                     f"<p>Termin: <strong>{slot.slot_datetime.isoformat()}</strong>.</p>"
                     f"<p>Ponuda važi do: <strong>{expires_at}</strong>.</p>"
+                ),
+            )
+            return True
+
+    return asyncio.run(_run())
+
+
+@celery_app.task(name="notifications.send_document_request_approved")
+def send_document_request_approved(
+    student_id: str,
+    document_type: str,
+    pickup_date: str,
+    admin_note: str,
+) -> bool:
+    async def _run() -> bool:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(User).where(User.id == UUID(student_id)))
+            user = result.scalar_one_or_none()
+            if user is None:
+                return False
+
+            doc_label = DocumentType(document_type).value if document_type else "DOKUMENT"
+            note = admin_note.strip() if admin_note and admin_note.strip() else "Studentska služba"
+
+            send_generic_notification_email(
+                to_email=user.email,
+                subject="Zahtev za dokument je odobren",
+                title="Vaš zahtev je odobren",
+                body_html=(
+                    f"<p>Vaš zahtev za dokument tipa <strong>{doc_label}</strong> je odobren.</p>"
+                    f"<p>Dokument možete preuzeti <strong>{pickup_date}</strong>.</p>"
+                    f"<p>Napomena: <strong>{note}</strong>.</p>"
+                ),
+            )
+            return True
+
+    return asyncio.run(_run())
+
+
+@celery_app.task(name="notifications.send_document_request_rejected")
+def send_document_request_rejected(
+    student_id: str,
+    document_type: str,
+    admin_note: str,
+) -> bool:
+    async def _run() -> bool:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(User).where(User.id == UUID(student_id)))
+            user = result.scalar_one_or_none()
+            if user is None:
+                return False
+
+            doc_label = DocumentType(document_type).value if document_type else "DOKUMENT"
+            note = admin_note.strip() if admin_note and admin_note.strip() else "Bez dodatnog obrazloženja."
+
+            send_generic_notification_email(
+                to_email=user.email,
+                subject="Zahtev za dokument je odbijen",
+                title="Vaš zahtev je odbijen",
+                body_html=(
+                    f"<p>Vaš zahtev za dokument tipa <strong>{doc_label}</strong> je odbijen.</p>"
+                    f"<p>Razlog: <strong>{note}</strong>.</p>"
                 ),
             )
             return True
