@@ -16,7 +16,18 @@ import {
 } from "@/lib/api/students"
 import type { Uuid } from "@/types"
 
-export function useProfessorSearch(params: ProfessorSearchParams) {
+type ProfessorSearchInput = string | ProfessorSearchParams
+
+function normalizeSearchInput(input: ProfessorSearchInput): ProfessorSearchParams {
+  if (typeof input === "string") {
+    return { q: input }
+  }
+  return input
+}
+
+export function useProfessorSearch(input: ProfessorSearchInput) {
+  const params = normalizeSearchInput(input)
+
   return useQuery({
     queryKey: ["professors", "search", params] as const,
     queryFn: () => studentsApi.searchProfessors(params),

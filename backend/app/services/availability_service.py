@@ -138,6 +138,16 @@ async def create_blackout(
     return blackout
 
 
+async def list_blackouts(db: AsyncSession, current_user: User) -> list[BlackoutDate]:
+    professor = await _get_professor_profile_or_404(db, current_user.id)
+    result = await db.execute(
+        select(BlackoutDate)
+        .where(BlackoutDate.professor_id == professor.id)
+        .order_by(BlackoutDate.start_date.asc(), BlackoutDate.end_date.asc())
+    )
+    return result.scalars().all()
+
+
 async def delete_blackout(db: AsyncSession, current_user: User, blackout_id: UUID) -> None:
     professor = await _get_professor_profile_or_404(db, current_user.id)
 

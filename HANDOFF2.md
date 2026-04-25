@@ -77,7 +77,7 @@ docker compose --profile app up -d --build
 docker exec studentska_backend alembic upgrade head
 
 # 6. Seed korisnika (samo prvi put — skripta skipuje postojeće)
-docker exec studentska_backend python /scripts/seed_db.py
+docker exec studentska_backend python ../scripts/seed_db.py
 ```
 
 ### Svaki sledeći put:
@@ -106,7 +106,7 @@ docker compose --profile app up -d frontend
 |-----|-----------|
 | `http://localhost` | Next.js login stranica (redirect sa `/` na `/login`) |
 | `http://localhost/api/v1/health` | `{"status":"ok"}` |
-| `http://localhost/api/v1/docs` | Swagger UI sa svim trenutnim endpointima |
+| `http://localhost/api/v1/docs` | Swagger UI sa svim trenutnim endpointima | ovde mi pise not found
 | `http://localhost:9001` | MinIO konzola (`minioadmin` / `minioadmin`) |
 | `http://localhost:3000` | (direktan pristup frontend-u, bypass nginx — za debug) |
 | `http://localhost:8000/docs` | (direktan pristup backend-u — za debug) |
