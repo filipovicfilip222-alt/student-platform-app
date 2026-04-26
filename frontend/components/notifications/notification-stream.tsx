@@ -66,14 +66,18 @@ export function NotificationStream(): null {
   const userId = useAuthStore((s) => s.user?.id ?? null)
   const qc = useQueryClient()
   const setConnected = useNotificationWsStatus((s) => s.setConnected)
+  const markUnavailable = useNotificationWsStatus((s) => s.markUnavailable)
+  const resetWsStatus = useNotificationWsStatus((s) => s.reset)
   const handleRef = useRef<NotificationSocketHandle | null>(null)
 
   useEffect(() => {
-    // No auth → tear down any existing socket and bail.
+    // No auth → tear down any existing socket and bail. Reset the store too
+    // so a fresh login isn't poisoned by a previous session's "unavailable"
+    // marker.
     if (!accessToken || !userId) {
       handleRef.current?.close()
       handleRef.current = null
-      setConnected(false)
+      resetWsStatus()
       return
     }
 
@@ -114,6 +118,9 @@ export function NotificationStream(): null {
     const handle = createNotificationSocket(accessToken, {
       onEvent: handleEvent,
       onStatusChange: (next: NotificationSocketStatus) => {
+        // `unavailable` is reported separately via onPermanentlyUnavailable;
+        // here we only flip the boolean isConnected for the polling-handoff
+        // hook in use-notifications.ts.
         setConnected(next === "open")
       },
       onTerminalClose: () => {
@@ -129,6 +136,13 @@ export function NotificationStream(): null {
         // with the new token. Nothing to do here.
         setConnected(false)
       },
+      onPermanentlyUnavailable: () => {
+        // Three transient handshakes failed back-to-back (typically because
+        // ROADMAP 4.2 is not yet deployed). Flip the discrete `unavailable`
+        // flag so the UI can render a non-spinning affordance, and let the
+        // REST polling layer take over (it self-throttles to 5 min on 404).
+        markUnavailable()
+      },
     })
 
     handleRef.current = handle
@@ -136,9 +150,11 @@ export function NotificationStream(): null {
     return () => {
       handle.close()
       if (handleRef.current === handle) handleRef.current = null
-      setConnected(false)
+      // Wipe both isConnected and isUnavailable so the next session starts
+      // from a clean slate (e.g. token swap after /auth/refresh).
+      resetWsStatus()
     }
-  }, [accessToken, userId, qc, setConnected])
+  }, [accessToken, userId, qc, setConnected, markUnavailable, resetWsStatus])
 
   return null
 }

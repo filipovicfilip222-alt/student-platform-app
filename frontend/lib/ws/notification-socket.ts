@@ -13,10 +13,16 @@
  *    to the provided event handler.
  *  - Auto-answer `system.ping` with `system.pong` so the server does not
  *    force-close us at 60 s of silence (schema §7.1).
- *  - Reconnect with exponential backoff 1s → 2s → 4s → 8s → 30s cap + ±20%
- *    jitter (§7.2), EXCEPT for terminal close codes 4401/4403/4404/4430.
- *  - Surface open / close / error lifecycle hooks to the component owner
- *    so it can render fallback UI (e.g. keep the REST polling shim alive).
+ *  - Reconnect with a SHORT, BOUNDED backoff (1s → 5s → 30s, no jitter
+ *    needed for so few attempts), EXCEPT for terminal close codes
+ *    4401/4403/4404/4430. After three transient failures we declare the
+ *    stream "unavailable" for this session, log a single warning, and stop
+ *    reconnecting. The REST polling fallback in use-notifications.ts then
+ *    further self-throttles to 5 min once it observes 404, preventing the
+ *    network-spam spiral seen while ROADMAP 4.2 is not deployed.
+ *  - Surface open / close / error / unavailable lifecycle hooks to the
+ *    component owner so it can render fallback UI (e.g. keep REST polling
+ *    alive, flip the WS status store to `isUnavailable`).
  *
  * NB: this module is transport-only — it does NOT touch the React Query
  * cache or auth store. `components/notifications/notification-stream.tsx`
@@ -33,12 +39,17 @@ import { WS_CLOSE_CODES } from "@/types/ws"
 const WS_BASE_URL =
   process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost"
 
-/** Reconnect backoff schedule in ms (schema §7.2). */
-const BACKOFF_STEPS_MS = [1_000, 2_000, 4_000, 8_000, 30_000]
-/** ±20% jitter to avoid thundering herd on server restart. */
-const JITTER_FACTOR = 0.2
-/** Stop reconnecting forever after this many failures (safety valve). */
-const MAX_TOTAL_ATTEMPTS = 100
+/**
+ * Reconnect backoff schedule in ms.
+ *
+ * Bounded on purpose: the historical schedule (1s/2s/4s/8s/30s with a
+ * 100-attempt cap) produced 60+ failed handshakes in 90 s while the
+ * notifications backend (ROADMAP 4.2) was missing, and that load was
+ * heavy enough to freeze unrelated dropdowns. We now allow exactly three
+ * retries — 1 s, 5 s, 30 s — and then stop until the user reloads the page.
+ */
+const BACKOFF_STEPS_MS = [1_000, 5_000, 30_000]
+const MAX_RECONNECT_ATTEMPTS = BACKOFF_STEPS_MS.length
 
 export type NotificationSocketStatus =
   | "idle"
@@ -46,6 +57,7 @@ export type NotificationSocketStatus =
   | "open"
   | "reconnecting"
   | "closed"
+  | "unavailable"
 
 export interface NotificationSocketCallbacks {
   onEvent: (event: NotificationWsEvent) => void
@@ -59,6 +71,12 @@ export interface NotificationSocketCallbacks {
    * socket does NOT call /auth/refresh on its own.
    */
   onUnauthorized?: () => void
+  /**
+   * Called exactly once per session when we exhaust the reconnect schedule.
+   * Consumer should flip its UI to a "stream nedostupan" affordance and
+   * keep relying on REST polling. Recovery requires a page reload.
+   */
+  onPermanentlyUnavailable?: () => void
 }
 
 export interface NotificationSocketHandle {
@@ -103,16 +121,25 @@ export function createNotificationSocket(
 
   function scheduleReconnect() {
     if (disposed) return
-    if (attempt >= MAX_TOTAL_ATTEMPTS) {
-      setStatus("closed")
+
+    // Short, bounded schedule. After MAX_RECONNECT_ATTEMPTS we give up for
+    // this session and switch the consumer over to "unavailable" mode — the
+    // REST polling fallback handles the rest.
+    if (attempt >= MAX_RECONNECT_ATTEMPTS) {
+      if (typeof window !== "undefined") {
+        // One-time log so a developer notices in DevTools without the
+        // console drowning in repeated handshake failures.
+        // eslint-disable-next-line no-console
+        console.warn(
+          "[notifications] Stream nedostupan, prebačen na REST polling."
+        )
+      }
+      callbacks.onPermanentlyUnavailable?.()
+      setStatus("unavailable")
       return
     }
 
-    const stepIndex = Math.min(attempt, BACKOFF_STEPS_MS.length - 1)
-    const base = BACKOFF_STEPS_MS[stepIndex]
-    const jitter = base * JITTER_FACTOR * (Math.random() * 2 - 1)
-    const delay = Math.max(500, Math.round(base + jitter))
-
+    const delay = BACKOFF_STEPS_MS[attempt]
     attempt += 1
     setStatus("reconnecting")
 
