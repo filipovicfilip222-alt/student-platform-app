@@ -5,10 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 
 from app.core.config import settings
-from app.api.v1 import admin, auth, professors, students
+from app.api.v1 import admin, appointments, auth, professors, students
 
 # ── Future router imports (uncomment as features are built) ───────────────────
-# from app.api.v1 import appointments, search, notifications
+# from app.api.v1 import search, notifications
 
 
 @asynccontextmanager
@@ -43,7 +43,7 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(students.router,       prefix="/api/v1/students",      tags=["Students"])
 app.include_router(professors.router,     prefix="/api/v1/professors",    tags=["Professors"])
 app.include_router(admin.router,          prefix="/api/v1/admin",         tags=["Admin"])
-# app.include_router(appointments.router,   prefix="/api/v1/appointments",  tags=["Appointments"])
+app.include_router(appointments.router,   prefix="/api/v1/appointments",  tags=["Appointments"])
 # app.include_router(search.router,         prefix="/api/v1/search",        tags=["Search"])
 # app.include_router(notifications.router,  prefix="/api/v1/notifications", tags=["Notifications"])
 
