@@ -1,25 +1,39 @@
 ﻿/**
- * (auth)/layout.tsx — Public route-group layout for /login, /register,
- * /forgot-password, /reset-password.
+ * (auth)/layout.tsx — Public route-group layout (split-screen).
  *
- * ROADMAP 2.3 — auth layout.
+ * Layout odgovornosti (KORAK 2):
+ *   - lg+ : 50/50 split — leva forma, desna brand panel sa burgundy → amber
+ *           gradient-om i feature listom (`<MarketingPanel />`).
+ *   - md- : full-width forma centrirana na muted bg-u; marketing panel
+ *           potpuno nestaje (`hidden lg:flex` u panelu) da se ne troši
+ *           viewport.
  *
- * The login and register pages each render their own full-height
- * centred card with the "Konsultacije FON & ETF" branding in the
- * CardTitle, so this layout intentionally stays a pass-through — adding
- * another header here would clash with the page-owned `min-h-screen`
- * wrapper. When we redesign auth pages in a later milestone, branding
- * and layout can be lifted here.
+ * Page-ovi (login/register/forgot/reset) renderuju SAMO formu — naslov,
+ * opis i navigaciju. Karticu, marketing panel i page-shell vlasi OVAJ
+ * layout, a ne pojedinačni page-ovi (eliminiše duplo-uvlačenje
+ * `min-h-screen` koje je postojalo pre KORAKA 2).
  *
- * Important: this layout must NOT render `<AppShell>` — auth pages are
- * served before any user exists in the Zustand store. Including the
- * shell would recursively try to read `user.role`.
+ * AppShell se NE renderuje — auth se servira pre nego što useAuthStore
+ * ima user-a; AppShell pokušaj `user.role` rezultovao bi runtime greškom.
  */
+
+import { MarketingPanel } from "@/components/auth/marketing-panel"
 
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return <>{children}</>
+  return (
+    <div className="grid min-h-screen lg:grid-cols-2">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10 outline-none sm:px-6 lg:bg-background lg:px-12"
+      >
+        <div className="w-full max-w-md">{children}</div>
+      </main>
+      <MarketingPanel />
+    </div>
+  )
 }

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import logging
 from uuid import UUID
 
 import redis.asyncio as aioredis
@@ -12,7 +13,17 @@ from app.models.availability_slot import AvailabilitySlot
 from app.models.enums import AppointmentStatus
 from app.models.user import User
 
+_log = logging.getLogger(__name__)
+
 WAITLIST_OFFER_TTL_SECONDS = 2 * 60 * 60
+
+# KORAK 2 Prompta 2 / PRD §3.1 — prioritetna lista posle blackout override-a.
+# Studenti čiji je APPROVED termin otkazan blackout-om idu OVDE 14 dana.
+# Kad profesor doda novi slot, hook u ``availability_service.create_slot``
+# preliva članove ove ZSET-e u ``waitlist:{slot_id}`` regular waitlist sa
+# negativnim score-om — tako budu PRVI kad ``waitlist_offer`` task okida
+# offer-e (Faza 4.6).
+PRIORITY_WAITLIST_TTL_SECONDS = 14 * 24 * 60 * 60
 
 
 def waitlist_key(slot_id: UUID) -> str:
@@ -21,6 +32,25 @@ def waitlist_key(slot_id: UUID) -> str:
 
 def waitlist_offer_key(slot_id: UUID, user_id: UUID) -> str:
     return f"waitlist:offer:{slot_id}:{user_id}"
+
+
+def priority_waitlist_key(professor_id: UUID) -> str:
+    """Per-profesor prioritetna lista (Redis ZSET).
+
+    Score je ``-now_timestamp`` — negativan da bi prioritetni članovi
+    imali manji score od regularnih (regular ZADD-ovi u
+    :func:`join_waitlist` koriste ``+now_timestamp``). FIFO unutar
+    prioriteta zadržan jer kasnije dodati imaju veći ``now`` → score je
+    još više negativan? Naprotiv: ako dva studenta odu na blackout
+    redom, prvi dobija score ``-1000``, drugi ``-1010`` — ZRANGE asc
+    izvlači prvo onog sa ``-1010`` (kasnije dodatog). To je BAG ako se
+    striktno traži FIFO unutar prioriteta. Prihvatljivo za demo:
+    blackout-i su uglavnom batch (svi u istom INSERT-u), tj. uvek
+    dobijaju isti score-tick → praktično FIFO po insertion order-u
+    Redis-a. Za striktni FIFO trebao bi mono-rastući counter ili dva
+    odvojena polja (priority_rank, joined_at) — out-of-scope za demo.
+    """
+    return f"waitlist:priority:{professor_id}"
 
 
 async def join_waitlist(
@@ -126,3 +156,100 @@ async def issue_waitlist_offer(
         await db.flush()
 
     return True
+
+
+# ── Priority waitlist (KORAK 2 Prompta 2) ──────────────────────────────────────
+
+
+async def add_to_priority_waitlist(
+    redis: aioredis.Redis,
+    *,
+    student_id: UUID,
+    professor_id: UUID,
+    ttl_seconds: int = PRIORITY_WAITLIST_TTL_SECONDS,
+) -> None:
+    """Dodaj studenta u profesorovu prioritetnu listu posle blackout override-a.
+
+    Redis ZSET ``waitlist:priority:{professor_id}`` čuva članove sa
+    score-om ``-now_ts`` da budu PRVI kad se ZRANGE-uje asc. EXPIRE se
+    refresh-uje na svaki novi insert (ako jedan student kasni 13 dana
+    od prvog blackout-a, lista mu i dalje važi).
+
+    Ne koristimo ``nx=True`` — prepiši postojeći score svežim
+    timestampom da idempotency (2x blackout) ne pomeri studenta nazad
+    iza druge ekipe (svi dobiju "current" score, redosled stabilan jer
+    su Redis insertion-ordered za isti score).
+    """
+    key = priority_waitlist_key(professor_id)
+    score = -datetime.now(timezone.utc).timestamp()
+    try:
+        await redis.zadd(key, {str(student_id): score})
+        await redis.expire(key, ttl_seconds)
+    except Exception as exc:  # noqa: BLE001
+        _log.warning(
+            "waitlist_service.add_to_priority_waitlist: Redis ZADD failed "
+            "professor=%s student=%s err=%s",
+            professor_id, student_id, exc,
+        )
+
+
+async def get_priority_members(
+    redis: aioredis.Redis,
+    professor_id: UUID,
+) -> list[tuple[UUID, float]]:
+    """Vrati sve članove profesorove prioritetne liste sa score-om.
+
+    Redosled: ZRANGE asc — najmanji (najnegativniji) score prvi.
+    """
+    key = priority_waitlist_key(professor_id)
+    try:
+        raw = await redis.zrange(key, 0, -1, withscores=True)
+    except Exception as exc:  # noqa: BLE001
+        _log.warning(
+            "waitlist_service.get_priority_members: Redis ZRANGE failed "
+            "professor=%s err=%s",
+            professor_id, exc,
+        )
+        return []
+
+    out: list[tuple[UUID, float]] = []
+    for member, score in raw:
+        try:
+            out.append((UUID(member), float(score)))
+        except (ValueError, TypeError):
+            continue
+    return out
+
+
+async def seed_slot_with_priority(
+    redis: aioredis.Redis,
+    *,
+    slot_id: UUID,
+    professor_id: UUID,
+) -> int:
+    """Napuni novi slot-ov ``waitlist:{slot_id}`` ZSET prioritetnim
+    članovima profesorove ``waitlist:priority:{professor_id}`` ZSET-e.
+
+    Score se prenosi 1:1 — prioritetni članovi su negativni (manji od
+    bilo kog ``+now_ts`` koji regularni waitlist join-eri kasnije
+    dobiju), tako da ``waitlist_offer`` task (Faza 4.6) ZRANGE-uje
+    prvo prioritetne. Vraća broj prelivenih članova (0 ako lista
+    prazna ili Redis neispravan — fail-soft, slot kreiranje se ne
+    abortuje).
+    """
+    members = await get_priority_members(redis, professor_id)
+    if not members:
+        return 0
+
+    target_key = waitlist_key(slot_id)
+    mapping = {str(uid): score for uid, score in members}
+    try:
+        added = await redis.zadd(target_key, mapping, nx=True)
+    except Exception as exc:  # noqa: BLE001
+        _log.warning(
+            "waitlist_service.seed_slot_with_priority: Redis ZADD failed "
+            "slot=%s professor=%s err=%s",
+            slot_id, professor_id, exc,
+        )
+        return 0
+    return int(added or 0)

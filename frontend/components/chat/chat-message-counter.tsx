@@ -1,9 +1,18 @@
 /**
- * chat-message-counter.tsx — "X / 20" indicator for TicketChat.
+ * chat-message-counter.tsx — "X / 20" indikator za TicketChat.
  *
- * ROADMAP 3.6 / Faza 3.6. Switches to a warning color when fewer than
- * 5 messages remain and to destructive when the cap is reached.
+ * KORAK 6 (StudentPlus polish):
+ *   - Skala boja:
+ *       0–14 → success (zelena, "imate prostora")
+ *       15–18 → warning (amber, "blizu kraja")
+ *       19 → primary-ish (poslednja poruka)
+ *       20 → destructive (limit dostignut)
+ *   - Ikona drugačija po fazi: MessageSquare → AlertTriangle → Lock.
+ *   - Live region (`aria-live="polite"`) saopštava promenu broja
+ *     screen-reader-ima.
  */
+
+import { AlertTriangle, Lock, MessageSquare } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -19,19 +28,39 @@ export function ChatMessageCounter({
   className,
 }: ChatMessageCounterProps) {
   const remaining = Math.max(0, max - current)
-  const tone =
-    remaining === 0
-      ? "text-destructive"
-      : remaining <= 5
-        ? "text-amber-600 dark:text-amber-400"
-        : "text-muted-foreground"
+  const reachedLimit = remaining === 0
+  const nearLimit = remaining > 0 && remaining <= 5
+
+  const tone = reachedLimit
+    ? "text-destructive bg-destructive/10"
+    : nearLimit
+      ? "text-amber-700 bg-amber-500/15 dark:text-amber-300"
+      : "text-success bg-success/10 dark:text-emerald-300"
+
+  const Icon = reachedLimit
+    ? Lock
+    : nearLimit
+      ? AlertTriangle
+      : MessageSquare
+
+  const label = reachedLimit
+    ? "Dostigao si limit poruka."
+    : nearLimit
+      ? `Još ${remaining} ${remaining === 1 ? "poruka" : "poruke"} pre limita.`
+      : `${remaining} poruka preostalo.`
 
   return (
     <span
-      className={cn("text-xs font-medium tabular-nums", tone, className)}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums transition-colors",
+        tone,
+        className
+      )}
       aria-live="polite"
+      aria-label={label}
     >
-      {current} / {max} poruka
+      <Icon className="size-3" aria-hidden />
+      {current} / {max}
     </span>
   )
 }

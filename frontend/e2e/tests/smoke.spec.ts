@@ -17,8 +17,12 @@ test.describe("Public routes", () => {
 
   test("/login renders the authentication form", async ({ page }) => {
     await page.goto("/login")
+    // Brand mark + wordmark renderuje <Logo /> sa role="img" + aria-label.
     await expect(
-      page.getByRole("heading", { name: /Konsultacije FON & ETF/i })
+      page.getByRole("img", { name: /StudentPlus/i }).first()
+    ).toBeVisible()
+    await expect(
+      page.getByRole("heading", { name: /Prijava/i })
     ).toBeVisible()
     await expect(page.getByLabel(/^Email$/i)).toBeVisible()
     await expect(page.getByLabel(/^Lozinka$/i)).toBeVisible()

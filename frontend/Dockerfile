@@ -15,7 +15,7 @@ COPY . .
 # Build-time env vars must be baked in (NEXT_PUBLIC_*)
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_WS_URL
-ARG NEXT_PUBLIC_APP_NAME="Konsultacije FON & ETF"
+ARG NEXT_PUBLIC_APP_NAME="StudentPlus"
 
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
@@ -32,7 +32,12 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && \
     adduser  --system --uid 1001 nextjs
 
-#COPY --from=builder /app/public ./public
+# public/ MORA u runner stage — `next-pwa` upisuje generisani service worker
+# (`public/sw.js`) i custom worker chunk (`public/worker-*.js`) u ovaj folder
+# tokom build-a, a Next.js standalone output ih NE kopira automatski (vidi
+# Next.js docs §"output: standalone"). Bez ove linije, `/sw.js` vraća 404 i
+# Web Push (KORAK 1 Prompta 2) ne radi.
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 

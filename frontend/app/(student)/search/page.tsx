@@ -21,6 +21,7 @@ import { Search as SearchIcon, SearchX } from "lucide-react"
 
 import { ProfessorSearchCard } from "@/components/student/professor-search-card"
 import { EmptyState } from "@/components/shared/empty-state"
+import { ErrorState } from "@/components/shared/error-state"
 import { PageHeader } from "@/components/shared/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -175,10 +176,11 @@ export default function SearchPage() {
             <Skeleton className="h-[160px] rounded-lg" />
           </div>
         ) : searchQuery.isError ? (
-          <EmptyState
-            icon={SearchX}
-            title="Greška pri pretrazi"
+          <ErrorState
+            title="Pretraga trenutno nije dostupna"
             description="Pokušajte ponovo za par sekundi."
+            onRetry={() => searchQuery.refetch()}
+            isRetrying={searchQuery.isFetching}
           />
         ) : results.length === 0 ? (
           <EmptyState

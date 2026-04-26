@@ -90,7 +90,7 @@ export function BulkImportDialog({ open, onOpenChange }: Props) {
           <DialogTitle>Bulk import korisnika</DialogTitle>
           <DialogDescription>
             Učitajte CSV sa kolonama{" "}
-            <code className="rounded bg-muted px-1">email, first_name, last_name, role, faculty, password</code>
+            <code className="rounded bg-muted px-1">ime, prezime, email, indeks, smer, godina_upisa</code>
             . Prvo se prikazuje pregled, a tek potom se podaci unose.
           </DialogDescription>
         </DialogHeader>

@@ -43,6 +43,21 @@ export function useRejectRequest() {
   })
 }
 
+export function useCancelRequest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: Uuid; reason: string }) =>
+      professorsApi.cancelRequest(id, { reason }),
+    onSuccess: () => {
+      // Touch BOTH the inbox and the student-side appointment caches —
+      // the same appointment may be visible in either place.
+      qc.invalidateQueries({ queryKey: INBOX_KEY })
+      qc.invalidateQueries({ queryKey: ["my-appointments"] })
+      qc.invalidateQueries({ queryKey: ["appointment"] })
+    },
+  })
+}
+
 export function useDelegateRequest() {
   const qc = useQueryClient()
   return useMutation({

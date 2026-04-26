@@ -1,8 +1,8 @@
-# Studentska Platforma — Frontend
+# StudentPlus — Frontend
 
-Next.js 14 (App Router) frontend za platformu za zakazivanje konsultacija
-između studenata i profesora FON-a i ETF-a. Ovaj README pokriva samo
-razvojni flow frontenda. Opšti pregled arhitekture je u
+Next.js 14 (App Router) frontend za **StudentPlus**, platformu za
+zakazivanje konsultacija između studenata i profesora FON-a i ETF-a.
+Ovaj README pokriva samo razvojni flow frontenda. Opšti pregled arhitekture je u
 [`../CLAUDE.md`](../CLAUDE.md) i [`../docs/`](../docs/).
 
 ## Tech stack

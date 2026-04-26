@@ -13,13 +13,14 @@
  *    to the provided event handler.
  *  - Auto-answer `system.ping` with `system.pong` so the server does not
  *    force-close us at 60 s of silence (schema §7.1).
- *  - Reconnect with a SHORT, BOUNDED backoff (1s → 5s → 30s, no jitter
- *    needed for so few attempts), EXCEPT for terminal close codes
- *    4401/4403/4404/4430. After three transient failures we declare the
- *    stream "unavailable" for this session, log a single warning, and stop
- *    reconnecting. The REST polling fallback in use-notifications.ts then
- *    further self-throttles to 5 min once it observes 404, preventing the
- *    network-spam spiral seen while ROADMAP 4.2 is not deployed.
+ *  - Reconnect with the standard schema §7.2 schedule: 1 s → 2 s → 4 s →
+ *    8 s → 30 s, ±20% jitter, hard cap 5 attempts. After the cap we declare
+ *    the stream "permanently unavailable" for this session and the consumer
+ *    falls back to REST polling. The schedule is intentionally identical to
+ *    chat-socket.ts so a single-page app with both channels exhibits the
+ *    same reconnect cadence — easier to reason about under flaky networks.
+ *    Terminal close codes (4401 / 4403 / 4404 / 4430) skip the schedule and
+ *    immediately surface to the consumer.
  *  - Surface open / close / error / unavailable lifecycle hooks to the
  *    component owner so it can render fallback UI (e.g. keep REST polling
  *    alive, flip the WS status store to `isUnavailable`).
@@ -40,16 +41,17 @@ const WS_BASE_URL =
   process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost"
 
 /**
- * Reconnect backoff schedule in ms.
+ * Reconnect backoff schedule in ms (schema §7.2).
  *
- * Bounded on purpose: the historical schedule (1s/2s/4s/8s/30s with a
- * 100-attempt cap) produced 60+ failed handshakes in 90 s while the
- * notifications backend (ROADMAP 4.2) was missing, and that load was
- * heavy enough to freeze unrelated dropdowns. We now allow exactly three
- * retries — 1 s, 5 s, 30 s — and then stop until the user reloads the page.
+ * Mirrors chat-socket.ts so the two channels share one mental model. The
+ * ±20% jitter shifts retries off the wall clock, smoothing thundering-herd
+ * reconnects after a backend restart. Five attempts (≈45 s wall-clock with
+ * jitter) is enough to ride out a typical container restart without
+ * spamming the server during a longer outage.
  */
-const BACKOFF_STEPS_MS = [1_000, 5_000, 30_000]
-const MAX_RECONNECT_ATTEMPTS = BACKOFF_STEPS_MS.length
+const BACKOFF_BASE_MS = [1_000, 2_000, 4_000, 8_000, 30_000]
+const BACKOFF_JITTER = 0.2 // ±20%
+const MAX_RECONNECT_ATTEMPTS = BACKOFF_BASE_MS.length
 
 export type NotificationSocketStatus =
   | "idle"
@@ -119,19 +121,21 @@ export function createNotificationSocket(
     return `${WS_BASE_URL}/api/v1/notifications/stream?token=${encodeURIComponent(token)}`
   }
 
+  function nextDelayMs(): number {
+    const base = BACKOFF_BASE_MS[attempt]
+    // ±20% jitter — Math.random gives [0,1); shift to [-1,1).
+    const jitter = (Math.random() * 2 - 1) * BACKOFF_JITTER
+    return Math.max(0, Math.round(base * (1 + jitter)))
+  }
+
   function scheduleReconnect() {
     if (disposed) return
 
-    // Short, bounded schedule. After MAX_RECONNECT_ATTEMPTS we give up for
-    // this session and switch the consumer over to "unavailable" mode — the
-    // REST polling fallback handles the rest.
     if (attempt >= MAX_RECONNECT_ATTEMPTS) {
       if (typeof window !== "undefined") {
-        // One-time log so a developer notices in DevTools without the
-        // console drowning in repeated handshake failures.
         // eslint-disable-next-line no-console
         console.warn(
-          "[notifications] Stream nedostupan, prebačen na REST polling."
+          "[notifications] WebSocket nedostupan posle 5 pokušaja. Prebačen na REST polling."
         )
       }
       callbacks.onPermanentlyUnavailable?.()
@@ -139,7 +143,7 @@ export function createNotificationSocket(
       return
     }
 
-    const delay = BACKOFF_STEPS_MS[attempt]
+    const delay = nextDelayMs()
     attempt += 1
     setStatus("reconnecting")
 

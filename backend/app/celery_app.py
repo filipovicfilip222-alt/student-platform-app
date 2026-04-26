@@ -8,8 +8,10 @@ celery_app = Celery(
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
     include=[
+        "app.tasks.broadcast_tasks",
         "app.tasks.email_tasks",
         "app.tasks.notifications",
+        "app.tasks.reminder_tasks",
         "app.tasks.strike_tasks",
         "app.tasks.waitlist_tasks",
     ],
@@ -33,6 +35,19 @@ celery_app.conf.update(
         "process-waitlist-offers-every-5-minutes": {
             "task": "waitlist_tasks.process_waitlist_offers",
             "schedule": crontab(minute="*/5"),
+        },
+        # Faza 4.6 — reminder dispatcher-i. Tick interval JE UŽI od scan
+        # window-a (30min < 60min za 24h, 15min < 30min za 1h) → svaki
+        # APPROVED termin će bar jedanput biti pokriven barem jednim
+        # tick-om. Idempotency Redis ključ ``reminder:{hours}:{id}``
+        # sprečava duplikate kad se prozori preklope.
+        "dispatch-reminders-24h-every-30-minutes": {
+            "task": "reminder_tasks.dispatch_24h",
+            "schedule": crontab(minute="*/30"),
+        },
+        "dispatch-reminders-1h-every-15-minutes": {
+            "task": "reminder_tasks.dispatch_1h",
+            "schedule": crontab(minute="*/15"),
         },
     },
 )

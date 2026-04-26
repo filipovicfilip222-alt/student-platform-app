@@ -48,9 +48,18 @@ export function middleware(request: NextRequest) {
 export const config = {
   // Run on all routes except:
   // - Next.js internals (_next/*)
-  // - Static assets
-  // - API routes (handled by backend, proxied through nginx)
+  // - Static assets (favicon, manifest, icons folder)
+  // - PWA + Web Push artifacts:
+  //     • sw.js                — generated next-pwa service worker (root-scoped).
+  //     • workbox-*.js         — workbox runtime imported by sw.js.
+  //     • worker-*.js          — compiled custom worker chunk (push handler,
+  //                              KORAK 1 Prompta 2). Browser fetches all four
+  //                              of these BEFORE any login state exists, so
+  //                              they MUST be public — without this the
+  //                              middleware 307s them to /login and the SW
+  //                              never registers (Web Push silently broken).
+  // - API routes (handled by backend, proxied through nginx).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.json|icons/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.json|icons/|sw\\.js|workbox-.*\\.js|worker-.*\\.js|swe-worker-.*\\.js).*)",
   ],
 }

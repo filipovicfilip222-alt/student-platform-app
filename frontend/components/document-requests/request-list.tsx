@@ -12,6 +12,7 @@ import { FileClock, FileText } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/shared/empty-state"
+import { ErrorState } from "@/components/shared/error-state"
 import {
   DOCUMENT_STATUS_LABELS,
   documentTypeLabel,
@@ -45,10 +46,12 @@ export function RequestList() {
 
   if (query.isError) {
     return (
-      <EmptyState
+      <ErrorState
         icon={FileClock}
         title="Lista zahteva nije dostupna"
         description="Backend endpoint /document-requests/me još nije aktivan (ROADMAP 4.8)."
+        onRetry={() => query.refetch()}
+        isRetrying={query.isFetching}
       />
     )
   }
@@ -69,7 +72,7 @@ export function RequestList() {
       {requests.map((r) => (
         <li
           key={r.id}
-          className="rounded-lg border border-border bg-background p-3"
+          className="rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/30"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">

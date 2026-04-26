@@ -11,9 +11,9 @@ import type { Metadata } from "next"
 export const metadata: Metadata = {
   title: "Prijava",
   description:
-    "Prijavite se u Konsultacije FON & ETF — platformu za zakazivanje " +
-    "konsultacija sa profesorima Fakulteta organizacionih nauka i " +
-    "Elektrotehničkog fakulteta Univerziteta u Beogradu.",
+    "Prijavite se u StudentPlus — platformu za zakazivanje konsultacija " +
+    "sa profesorima Fakulteta organizacionih nauka i Elektrotehničkog " +
+    "fakulteta Univerziteta u Beogradu.",
   robots: { index: true, follow: true },
 }
 

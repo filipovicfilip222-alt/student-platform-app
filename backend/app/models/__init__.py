@@ -24,9 +24,11 @@ from app.models.strike import StrikeRecord, StudentBlock  # noqa: F401
 from app.models.faq import FaqItem  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
+from app.models.broadcast import Broadcast  # noqa: F401
 from app.models.canned_response import CannedResponse  # noqa: F401
 from app.models.document_request import DocumentRequest  # noqa: F401
 from app.models.password_reset_token import PasswordResetToken  # noqa: F401
+from app.models.push_subscription import PushSubscription  # noqa: F401
 
 __all__ = [
     "Base",
@@ -47,7 +49,9 @@ __all__ = [
     "FaqItem",
     "Notification",
     "AuditLog",
+    "Broadcast",
     "CannedResponse",
     "DocumentRequest",
     "PasswordResetToken",
+    "PushSubscription",
 ]

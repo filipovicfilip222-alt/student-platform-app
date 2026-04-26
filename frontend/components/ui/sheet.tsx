@@ -74,10 +74,10 @@ function SheetContent({
               variant="ghost"
               className="absolute top-3 right-3"
               size="icon-sm"
+              aria-label="Zatvori"
             >
-              <XIcon
-              />
-              <span className="sr-only">Close</span>
+              <XIcon aria-hidden />
+              <span className="sr-only">Zatvori panel</span>
             </Button>
           </SheetPrimitive.Close>
         )}

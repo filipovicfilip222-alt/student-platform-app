@@ -62,6 +62,36 @@ async def _get_user_by_email(db: AsyncSession, email: str) -> User | None:
     return result.scalar_one_or_none()
 
 
+async def _create_reset_token(
+    db: AsyncSession,
+    user: User,
+    ttl_seconds: int,
+) -> str:
+    """Create a one-time password-reset token for a user.
+
+    Returns the **raw** (unhashed) token. The DB stores only its SHA-256 hash.
+    Caller is responsible for emailing the raw token to the user (Celery).
+
+    Reused by:
+      * forgot_password()                              — TTL = 1h
+      * admin_user_service.create_user()               — TTL = 7d (welcome)
+      * admin_user_service.bulk_import_confirm()       — TTL = 7d (welcome)
+    """
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = _hash_reset_token(raw_token)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
+
+    db.add(
+        PasswordResetToken(
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+    )
+    await db.flush()
+    return raw_token
+
+
 # ── Register ───────────────────────────────────────────────────────────────────
 
 async def register(db: AsyncSession, data: RegisterRequest) -> User:
@@ -206,19 +236,7 @@ async def forgot_password(db: AsyncSession, email: str) -> None:
     if not user or not user.is_active:
         return  # silent — don't leak whether the email exists
 
-    raw_token = secrets.token_urlsafe(32)
-    token_hash = _hash_reset_token(raw_token)
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=_RESET_TOKEN_TTL_SECONDS)
-
-    db.add(
-        PasswordResetToken(
-            user_id=user.id,
-            token_hash=token_hash,
-            expires_at=expires_at,
-        )
-    )
-    await db.flush()
-
+    raw_token = await _create_reset_token(db, user, ttl_seconds=_RESET_TOKEN_TTL_SECONDS)
     send_password_reset_email(to_email=user.email, reset_token=raw_token)
 
 

@@ -1,20 +1,14 @@
 /**
- * users-table.tsx — Full CRUD table for ADMIN → Korisnici.
+ * users-table.tsx — Full CRUD table za ADMIN → Korisnici.
  *
- * ROADMAP 4.7 / FRONTEND_STRUKTURA §2 admin section. Per-row actions:
- *   - Edit     → opens <UserFormModal mode="edit" />
- *   - Deactivate → AlertDialog confirmation
- *   - Impersonate → calls `useStartImpersonation(id)` (the flow that
- *                   swaps auth store + opens the ImpersonationBanner —
- *                   see lib/hooks/use-impersonation.ts + docs/
- *                   websocket-schema.md §6).
+ * KORAK 4 — refaktor sa generic `<DataTable />`. Per-row akcije sada idu
+ * u kompaktan `<DropdownMenu />` (MoreHorizontal trigger), umesto 3
+ * inline ghost button-a koji su visili iz desne strane reda.
  *
- * Filters (q / role / faculty) live in this component — no separate
- * `users-filters.tsx` is needed given how compact the filter set is.
- *
- * Until the backend `/admin/users` router lands (ROADMAP 4.7 ❌) the
- * table renders an error-fallback empty state; toggles and actions
- * remain wired so the integration is zero-code-change on backend go-live.
+ * Filteri (q / role / faculty) su SERVER-driven — `useAdminUsers(filters)`
+ * šalje params na backend (unaccent prefix iz Prompt 1 KORAK 10).
+ * Pagination i sort su CLIENT-driven preko DataTable-a (server vraća
+ * collapsed listu jer interni admin set retko prelazi 1000+).
  */
 
 "use client"
@@ -23,13 +17,14 @@ import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   Loader2,
+  MoreHorizontal,
   Pencil,
-  Search,
   ShieldAlert,
   UserMinus,
   UserRound,
   UsersRound,
 } from "lucide-react"
+import type { ColumnDef } from "@tanstack/react-table"
 
 import {
   AlertDialog,
@@ -43,7 +38,19 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { DataTable } from "@/components/ui/data-table"
+import {
+  DataTableToolbar,
+  FilterChip,
+} from "@/components/ui/data-table-toolbar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Select,
   SelectContent,
@@ -51,16 +58,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { EmptyState } from "@/components/shared/empty-state"
 import { FacultyBadge } from "@/components/shared/faculty-badge"
 import { ROLES, roleLabel } from "@/lib/constants/roles"
 import { ROUTES } from "@/lib/constants/routes"
@@ -113,8 +110,6 @@ export function UsersTable({ onBulkImportClick }: UsersTableProps) {
         "Impersonacija pokrenuta",
         `Prijavljeni ste kao ${user.first_name} ${user.last_name}.`
       )
-      // Per FRONTEND_STRUKTURA §3.6 — redirect to the target user's home
-      // so admin tools stop being the active surface.
       const target =
         user.role === "ADMIN"
           ? ROUTES.admin
@@ -143,208 +138,208 @@ export function UsersTable({ onBulkImportClick }: UsersTableProps) {
 
   const users = usersQuery.data ?? []
 
+  // ── Column definitions ────────────────────────────────────────────────
+  const columns = useMemo<ColumnDef<AdminUserResponse>[]>(
+    () => [
+      {
+        accessorFn: (u) => `${u.first_name} ${u.last_name}`,
+        id: "name",
+        header: "Ime",
+        cell: ({ row }) => (
+          <span className="font-medium">
+            {row.original.first_name} {row.original.last_name}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "email",
+        header: "Email",
+        cell: ({ getValue }) => (
+          <span className="font-mono text-xs text-muted-foreground">
+            {getValue<string>()}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "role",
+        header: "Uloga",
+        cell: ({ getValue }) => (
+          <Badge variant="outline">{roleLabel(getValue<Role>())}</Badge>
+        ),
+      },
+      {
+        accessorKey: "faculty",
+        header: "Fakultet",
+        cell: ({ getValue }) => {
+          const f = getValue<Faculty | null>()
+          return f ? (
+            <FacultyBadge faculty={f} />
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )
+        },
+      },
+      {
+        accessorKey: "is_active",
+        header: "Status",
+        cell: ({ getValue }) =>
+          getValue<boolean>() ? (
+            <Badge variant="secondary">Aktivan</Badge>
+          ) : (
+            <Badge variant="destructive">Deaktiviran</Badge>
+          ),
+      },
+      {
+        id: "actions",
+        header: () => <span className="sr-only">Akcije</span>,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const u = row.original
+          const isImpersonating =
+            startImpersonation.isPending && startImpersonation.variables === u.id
+          return (
+            <div className="flex justify-end">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Akcije za ${u.first_name} ${u.last_name}`}
+                  >
+                    {isImpersonating ? (
+                      <Loader2 className="animate-spin" aria-hidden />
+                    ) : (
+                      <MoreHorizontal aria-hidden />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuLabel>Korisnik</DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={() => setEditingUser(u)}>
+                    <Pencil aria-hidden />
+                    Izmeni
+                  </DropdownMenuItem>
+                  {u.role !== "ADMIN" && (
+                    <DropdownMenuItem
+                      disabled={!u.is_active || startImpersonation.isPending}
+                      onSelect={() => handleImpersonate(u)}
+                    >
+                      <ShieldAlert aria-hidden />
+                      Impersoniraj
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={!u.is_active}
+                    variant="destructive"
+                    onSelect={() => setDeactivationTarget(u)}
+                  >
+                    <UserMinus aria-hidden />
+                    Deaktiviraj
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )
+        },
+      },
+    ],
+    [startImpersonation.isPending, startImpersonation.variables]
+  )
+
   return (
     <div className="space-y-4">
-      {/* ── Filter row ────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3 sm:flex-row sm:items-end">
-        <div className="flex-1">
-          <label
-            htmlFor="users-search"
-            className="mb-1 block text-xs font-medium text-muted-foreground"
-          >
-            Pretraga
-          </label>
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden
-            />
-            <Input
-              id="users-search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ime, prezime ili email"
-              className="pl-8"
-            />
-          </div>
-        </div>
+      <DataTable<AdminUserResponse, unknown>
+        data={users}
+        columns={columns}
+        isLoading={usersQuery.isLoading}
+        isError={usersQuery.isError}
+        ariaLabel="Tabela korisnika"
+        toolbar={
+          <DataTableToolbar
+            searchValue={query}
+            searchPlaceholder="Ime, prezime ili email"
+            onSearchChange={setQuery}
+            filters={
+              <>
+                <Select
+                  value={role}
+                  onValueChange={(v) => setRole(v as Role | "ALL")}
+                >
+                  <SelectTrigger className="h-8 w-44" aria-label="Uloga">
+                    <SelectValue placeholder="Sve uloge" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Sve uloge</SelectItem>
+                    {ROLES.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {roleLabel(r)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-        <div className="w-full sm:w-44">
-          <label
-            htmlFor="users-role"
-            className="mb-1 block text-xs font-medium text-muted-foreground"
-          >
-            Uloga
-          </label>
-          <Select
-            value={role}
-            onValueChange={(v) => setRole(v as Role | "ALL")}
-          >
-            <SelectTrigger id="users-role" className="w-full">
-              <SelectValue placeholder="Sve uloge" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Sve uloge</SelectItem>
-              {ROLES.map((r) => (
-                <SelectItem key={r} value={r}>
-                  {roleLabel(r)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+                <Select
+                  value={faculty}
+                  onValueChange={(v) => setFaculty(v as Faculty | "ALL")}
+                >
+                  <SelectTrigger className="h-8 w-32" aria-label="Fakultet">
+                    <SelectValue placeholder="Svi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Svi</SelectItem>
+                    {FACULTY_OPTIONS.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-        <div className="w-full sm:w-32">
-          <label
-            htmlFor="users-faculty"
-            className="mb-1 block text-xs font-medium text-muted-foreground"
-          >
-            Fakultet
-          </label>
-          <Select
-            value={faculty}
-            onValueChange={(v) => setFaculty(v as Faculty | "ALL")}
-          >
-            <SelectTrigger id="users-faculty" className="w-full">
-              <SelectValue placeholder="Svi" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Svi</SelectItem>
-              {FACULTY_OPTIONS.map((f) => (
-                <SelectItem key={f} value={f}>
-                  {f}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex shrink-0 gap-2 sm:ml-auto">
-          <Button variant="outline" onClick={onBulkImportClick}>
-            <UsersRound aria-hidden />
-            Bulk import
-          </Button>
-          <Button onClick={() => setCreatingUser(true)}>
-            <UserRound aria-hidden />
-            Novi korisnik
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Table ─────────────────────────────────────────────────────── */}
-      <div className="overflow-hidden rounded-lg border border-border bg-background">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[30%]">Ime</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Uloga</TableHead>
-              <TableHead>Fakultet</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Akcije</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {usersQuery.isLoading ? (
-              Array.from({ length: 4 }).map((_, idx) => (
-                <TableRow key={idx}>
-                  <TableCell colSpan={6}>
-                    <Skeleton className="h-6 w-full" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : usersQuery.isError ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-8">
-                  <EmptyState
-                    icon={ShieldAlert}
-                    title="Korisnici nisu dostupni"
-                    description="Backend endpoint /admin/users još nije aktivan (ROADMAP 4.7)."
+                {role !== "ALL" && (
+                  <FilterChip
+                    label="Uloga"
+                    value={roleLabel(role)}
+                    onClear={() => setRole("ALL")}
                   />
-                </TableCell>
-              </TableRow>
-            ) : users.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-8">
-                  <EmptyState
-                    icon={UserRound}
-                    title="Nema pronađenih korisnika"
-                    description="Pokušajte izmenom filtera ili dodajte novog korisnika."
+                )}
+                {faculty !== "ALL" && (
+                  <FilterChip
+                    label="Fakultet"
+                    value={faculty}
+                    onClear={() => setFaculty("ALL")}
                   />
-                </TableCell>
-              </TableRow>
-            ) : (
-              users.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">
-                    {u.first_name} {u.last_name}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {u.email}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{roleLabel(u.role as Role)}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <FacultyBadge faculty={u.faculty as Faculty} />
-                  </TableCell>
-                  <TableCell>
-                    {u.is_active ? (
-                      <Badge variant="secondary">Aktivan</Badge>
-                    ) : (
-                      <Badge variant="destructive">Deaktiviran</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setEditingUser(u)}
-                        aria-label={`Izmeni ${u.first_name} ${u.last_name}`}
-                      >
-                        <Pencil aria-hidden />
-                        Izmeni
-                      </Button>
-                      {u.role !== "ADMIN" && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleImpersonate(u)}
-                          disabled={
-                            startImpersonation.isPending || !u.is_active
-                          }
-                          aria-label={`Impersoniraj ${u.first_name} ${u.last_name}`}
-                        >
-                          {startImpersonation.isPending &&
-                          startImpersonation.variables === u.id ? (
-                            <Loader2 className="animate-spin" aria-hidden />
-                          ) : (
-                            <ShieldAlert aria-hidden />
-                          )}
-                          Impersoniraj
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setDeactivationTarget(u)}
-                        disabled={!u.is_active}
-                        aria-label={`Deaktiviraj ${u.first_name} ${u.last_name}`}
-                      >
-                        <UserMinus aria-hidden />
-                        Deaktiviraj
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+                )}
+              </>
+            }
+            actions={
+              <>
+                <Button variant="outline" onClick={onBulkImportClick}>
+                  <UsersRound aria-hidden />
+                  Bulk import
+                </Button>
+                <Button onClick={() => setCreatingUser(true)}>
+                  <UserRound aria-hidden />
+                  Novi korisnik
+                </Button>
+              </>
+            }
+          />
+        }
+        emptyState={{
+          icon: UserRound,
+          title: "Nema pronađenih korisnika",
+          description:
+            "Pokušajte izmenom filtera ili dodajte novog korisnika.",
+        }}
+        errorState={{
+          icon: ShieldAlert,
+          title: "Korisnici nisu dostupni",
+          description:
+            "Backend endpoint /admin/users još nije aktivan (ROADMAP 4.7).",
+        }}
+      />
 
-      {/* ── Edit / Create modals ─────────────────────────────────────── */}
       <UserFormModal
         mode="create"
         open={creatingUser}
@@ -357,7 +352,6 @@ export function UsersTable({ onBulkImportClick }: UsersTableProps) {
         onOpenChange={(open) => !open && setEditingUser(null)}
       />
 
-      {/* ── Deactivate confirmation ──────────────────────────────────── */}
       <AlertDialog
         open={Boolean(deactivationTarget)}
         onOpenChange={(open) => !open && setDeactivationTarget(null)}

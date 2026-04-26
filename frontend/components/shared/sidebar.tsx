@@ -14,7 +14,7 @@
 
 "use client"
 
-import { GraduationCap, LogOut } from "lucide-react"
+import { LogOut } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils"
 import { toastApiError } from "@/lib/utils/errors"
 import type { Role } from "@/types/common"
 
+import { Logo } from "./logo"
 import { SidebarNavItem } from "./sidebar-nav-item"
 
 export interface SidebarProps {
@@ -75,18 +76,20 @@ export function Sidebar({
         "flex h-full w-60 shrink-0 flex-col border-r border-border bg-background",
         className
       )}
-      aria-label="Glavna navigacija"
     >
       <Link
         href={href}
         onClick={onNavigate}
-        className="flex h-14 items-center gap-2 border-b border-border px-4 font-semibold tracking-tight"
+        className="flex h-14 items-center gap-2 border-b border-border px-4 transition-colors hover:bg-muted/40"
+        aria-label="StudentPlus — početna"
       >
-        <GraduationCap className="size-5 text-primary" aria-hidden />
-        <span className="truncate">Konsultacije</span>
+        <Logo variant="full" size="md" />
       </Link>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+      <nav
+        aria-label="Glavna navigacija"
+        className="flex-1 space-y-1 overflow-y-auto p-3"
+      >
         {items.map((item) => (
           <SidebarNavItem
             key={item.href}

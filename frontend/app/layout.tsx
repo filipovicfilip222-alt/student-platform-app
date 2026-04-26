@@ -1,24 +1,36 @@
 import type { Metadata, Viewport } from "next"
-import { Inter } from "next/font/google"
+import { Inter, JetBrains_Mono } from "next/font/google"
 import { Providers } from "./providers"
 import "./globals.css"
 import { cn } from "@/lib/utils"
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+  variable: "--font-sans",
+  weight: ["400", "500", "600", "700"],
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+  variable: "--font-mono",
+  weight: ["400", "500", "600"],
+})
 
 export const metadata: Metadata = {
   title: {
-    default: "Konsultacije FON & ETF",
-    template: "%s | Konsultacije FON & ETF",
+    default: "StudentPlus",
+    template: "%s | StudentPlus",
   },
   description:
-    "Platforma za zakazivanje konsultacija između studenata i profesora FON-a i ETF-a.",
+    "StudentPlus — pametno upravljanje konsultacijama na FON-u i ETF-u.",
   manifest: "/manifest.json",
-  applicationName: "Konsultacije FON & ETF",
+  applicationName: "StudentPlus",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Konsultacije",
+    title: "StudentPlus",
   },
   icons: {
     icon: [
@@ -35,7 +47,10 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#0f172a",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#7B1E2C" },
+    { media: "(prefers-color-scheme: dark)", color: "#050816" },
+  ],
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
@@ -47,8 +62,27 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="sr" suppressHydrationWarning className={cn("font-sans")}>
-      <body className={inter.className}>
+    <html
+      lang="sr"
+      suppressHydrationWarning
+      className={cn(inter.variable, jetbrainsMono.variable, "no-transitions")}
+    >
+      <head>
+        {/* Strip the no-transitions guard once the document is interactive,
+            so theme toggle (KORAK 1) and any future CSS transitions can run.
+            next-themes injects the `.dark` class before hydration; without
+            this guard, the very first paint would animate the swap. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "document.documentElement.classList.remove('no-transitions');",
+          }}
+        />
+      </head>
+      <body className={cn("font-sans antialiased")}>
+        <a href="#main-content" className="skip-link">
+          Preskoči na glavni sadržaj
+        </a>
         <Providers>{children}</Providers>
       </body>
     </html>

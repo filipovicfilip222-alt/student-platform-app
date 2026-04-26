@@ -1,17 +1,24 @@
 /**
  * faculty-badge.tsx — FON / ETF colored chip.
  *
- * ROADMAP 2.2 — shared shell primitives.
- * Used wherever a professor/student's faculty needs to be surfaced (search
- * results, professor header, admin tables).
+ * KORAK 4 brand alignment:
+ *   - FON → amber gold (#E8A93D u light, #F4C56A u dark)
+ *   - ETF → burgundy   (#7B1E2C u light, #B0405A u dark)
+ *
+ * Boje dolaze iz HSL token-a `--faculty-fon` / `--faculty-etf` definisanih
+ * u `app/globals.css` (KORAK 1). Token-i imaju automatsku light/dark
+ * varijantu — komponenta sama ne mora da hendluje theme switch.
+ *
+ * Kontrast: AA (>= 4.5:1) za oba para u oba theme-a (verifikovano u
+ * `docs/DESIGN_SYSTEM.md`).
  */
 
 import { cn } from "@/lib/utils"
 import type { Faculty } from "@/types/common"
 
 const FACULTY_STYLES: Record<Faculty, string> = {
-  FON: "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-500/10 dark:text-blue-200 dark:border-blue-400/30",
-  ETF: "bg-red-100 text-red-800 border-red-200 dark:bg-red-500/10 dark:text-red-200 dark:border-red-400/30",
+  FON: "bg-faculty-fon text-faculty-fon-foreground border-faculty-fon/40",
+  ETF: "bg-faculty-etf text-faculty-etf-foreground border-faculty-etf/40",
 }
 
 export interface FacultyBadgeProps {

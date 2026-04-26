@@ -211,6 +211,52 @@ async def reject_request(
     return appointment
 
 
+async def cancel_request(
+    db: AsyncSession,
+    current_user: User,
+    appointment_id: UUID,
+    reason: str,
+) -> Appointment:
+    """Profesor / asistent otkazuje već odobreni termin.
+
+    Backend symmetric pair to ``booking_service.cancel_appointment`` (which
+    is student-only). The professor flow has no late-cancel strike — strike
+    is a sanction against students; staff cancel for legitimate reasons
+    (bolovanje, kolizija, hitna nedostupnost) and the rejection_reason
+    column is reused to record the explanation shown to the student.
+    """
+    appointment = await _get_actionable_request_or_404(db, current_user, appointment_id)
+
+    if appointment.status != AppointmentStatus.APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Samo APPROVED termini mogu biti otkazani.",
+        )
+
+    appointment.status = AppointmentStatus.CANCELLED
+    appointment.rejection_reason = reason.strip()
+
+    await db.flush()
+    # Eksplicitan commit + dispatch posle commit-a (isti pattern kao
+    # booking_service.cancel_appointment i broadcast_service.dispatch
+    # iz Faze 4.5 — KORAK 7 fix). Bez ovoga, Celery task bi mogao
+    # da pokupi appointment red pre nego što ga ``get_db`` commituje.
+    #
+    # send_appointment_cancelled task (uveden u Fazi 4.6) zamenjuje
+    # raniji ``send_appointment_rejected`` koji je semantički bio pogrešan
+    # (odbijen vs otkazan termin imaju različite poruke u PRD §5.2).
+    # Profesor je excluded iz fan-out-a unutar task-a — notifikuju se
+    # lead student + svi CONFIRMED non-lead participants.
+    await db.commit()
+
+    from app.tasks.notifications import send_appointment_cancelled
+
+    send_appointment_cancelled.delay(
+        str(appointment.id), "PROFESOR", appointment.rejection_reason
+    )
+    return appointment
+
+
 async def delegate_request(
     db: AsyncSession,
     current_user: User,

@@ -1,12 +1,12 @@
 {
-  "name": "Studentska Platforma FON & ETF",
-  "short_name": "Konsultacije",
-  "description": "Platforma za upravljanje univerzitetskim konsultacijama između studenata i profesora FON-a i ETF-a.",
+  "name": "StudentPlus",
+  "short_name": "StudentPlus",
+  "description": "StudentPlus — pametno upravljanje konsultacijama na FON-u i ETF-u.",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0f172a",
+  "background_color": "#FFFFFF",
+  "theme_color": "#7B1E2C",
   "orientation": "portrait",
   "lang": "sr-Latn",
   "dir": "ltr",
@@ -29,6 +29,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

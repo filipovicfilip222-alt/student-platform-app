@@ -26,14 +26,16 @@ import FullCalendar from "@fullcalendar/react"
 import dayGridPlugin from "@fullcalendar/daygrid"
 import timeGridPlugin from "@fullcalendar/timegrid"
 import interactionPlugin from "@fullcalendar/interaction"
+import listPlugin from "@fullcalendar/list"
 import type {
   DateSelectArg,
   EventClickArg,
+  EventContentArg,
   EventDropArg,
   EventInput,
 } from "@fullcalendar/core"
 import type { EventResizeDoneArg } from "@fullcalendar/interaction"
-import { Loader2, Trash2 } from "lucide-react"
+import { Loader2, Repeat, Trash2 } from "lucide-react"
 
 import {
   AlertDialog,
@@ -46,8 +48,8 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Skeleton } from "@/components/ui/skeleton"
 import { CalendarLegend } from "@/components/calendar/calendar-legend"
+import { CalendarSkeleton } from "@/components/calendar/calendar-skeleton"
 import { RecurringRuleModal } from "@/components/calendar/recurring-rule-modal"
 import {
   useCreateSlot,
@@ -83,23 +85,42 @@ export function AvailabilityCalendar({
 
   const events: EventInput[] = useMemo(() => {
     const slots = slotsQuery.data ?? []
+    const now = Date.now()
     return slots.map((slot) => {
       const start = new Date(slot.slot_datetime)
       const end = new Date(start.getTime() + slot.duration_minutes * 60 * 1000)
       const isRecurring = Boolean(slot.recurring_rule)
+      const isPast = end.getTime() < now
+      const classes = [
+        isRecurring ? "fc-event--recurring" : "fc-event--available",
+      ]
+      if (isPast) classes.push("fc-event--past")
       return {
         id: slot.id,
         title:
           slot.consultation_type === "ONLINE" ? "Online slot" : "Slot (uživo)",
         start,
         end,
-        backgroundColor: isRecurring ? "rgb(14 165 233)" : "rgb(16 185 129)",
-        borderColor: isRecurring ? "rgb(14 165 233)" : "rgb(16 185 129)",
-        editable: !readOnly && !isRecurring,
-        extendedProps: { slot },
+        classNames: classes,
+        editable: !readOnly && !isRecurring && !isPast,
+        extendedProps: { slot, isRecurring, isPast },
       }
     })
   }, [slotsQuery.data, readOnly])
+
+  function renderEventContent(arg: EventContentArg) {
+    const { isRecurring } = arg.event.extendedProps as { isRecurring?: boolean }
+    return (
+      <div className="flex h-full w-full items-center gap-1 px-1.5 py-1 leading-tight">
+        {isRecurring && (
+          <Repeat className="size-3 shrink-0" aria-hidden />
+        )}
+        <span className="truncate text-[0.7rem] font-medium">
+          {arg.timeText}
+        </span>
+      </div>
+    )
+  }
 
   function handleSelect(arg: DateSelectArg) {
     if (readOnly) return
@@ -186,7 +207,7 @@ export function AvailabilityCalendar({
   return (
     <div className={cn("space-y-3", className)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <CalendarLegend />
+        <CalendarLegend mode="professor" />
         {isMutating && (
           <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" aria-hidden />
@@ -196,17 +217,22 @@ export function AvailabilityCalendar({
       </div>
 
       {isLoading ? (
-        <Skeleton className="h-[600px] w-full rounded-lg" />
+        <CalendarSkeleton />
       ) : (
-        <div className="rounded-lg border bg-card p-2">
+        <div className="rounded-lg border border-border bg-card p-2 transition-colors">
           <FullCalendar
             ref={calendarRef}
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+            plugins={[
+              dayGridPlugin,
+              timeGridPlugin,
+              interactionPlugin,
+              listPlugin,
+            ]}
             initialView="timeGridWeek"
             headerToolbar={{
               left: "prev,next today",
               center: "title",
-              right: "timeGridWeek,dayGridMonth,timeGridDay",
+              right: "timeGridWeek,dayGridMonth,timeGridDay,listWeek",
             }}
             firstDay={1}
             locale="sr"
@@ -223,11 +249,13 @@ export function AvailabilityCalendar({
             eventClick={handleEventClick}
             eventDrop={handleEventDrop}
             eventResize={handleEventResize}
+            eventContent={renderEventContent}
             buttonText={{
               today: "Danas",
               month: "Mesec",
               week: "Nedelja",
               day: "Dan",
+              list: "Lista",
             }}
             noEventsText="Nemate definisane slotove u ovom periodu."
           />

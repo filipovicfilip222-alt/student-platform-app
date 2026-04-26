@@ -39,6 +39,7 @@ import type { Role } from "@/types/common"
 
 import { ImpersonationBanner } from "./impersonation-banner"
 import { OfflineIndicator } from "./offline-indicator"
+import { PageTransition } from "./page-transition"
 import { Sidebar } from "./sidebar"
 import { TopBar } from "./top-bar"
 
@@ -87,8 +88,12 @@ export function AppShell({ role, children }: AppShellProps) {
               }
             />
 
-            <main className="flex-1 overflow-y-auto bg-muted/30 p-4 sm:p-6">
-              {children}
+            <main
+              id="main-content"
+              tabIndex={-1}
+              className="flex-1 overflow-y-auto bg-muted/30 p-4 outline-none sm:p-6"
+            >
+              <PageTransition>{children}</PageTransition>
             </main>
           </div>
         </div>

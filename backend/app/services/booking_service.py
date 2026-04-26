@@ -261,6 +261,21 @@ async def cancel_appointment(
 
     await db.flush()
     await db.refresh(appointment)
+    # Eksplicitan commit + dispatch posle commit-a (isti pattern kao
+    # broadcast_service.dispatch iz Faze 4.5). Bez ovoga, Celery worker
+    # bi mogao da pokupi task pre nego što ``get_db`` izvrši yield-after
+    # commit, pa bi SELECT u task-u promašio appointment red.
+    #
+    # send_appointment_cancelled task notifikuje profesora + sve CONFIRMED
+    # participants — student koji je inicirao cancel je excluded unutar
+    # task-a (ne treba mu notif samog sebe). Ovo popravlja PRD §5.2 bug
+    # u kome je ``cancel_appointment`` istorijski NE dispečovao nikakvu
+    # notifikaciju (profesor nikad nije saznavao da je student otkazao).
+    await db.commit()
+
+    from app.tasks.notifications import send_appointment_cancelled
+
+    send_appointment_cancelled.delay(str(appointment.id), "STUDENT", None)
 
     return appointment
 

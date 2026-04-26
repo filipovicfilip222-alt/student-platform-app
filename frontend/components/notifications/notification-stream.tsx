@@ -35,6 +35,7 @@ import {
   NOTIFICATION_LIST_KEY,
   NOTIFICATION_UNREAD_KEY,
 } from "@/lib/hooks/use-notifications"
+import { getToastTitle } from "@/lib/notifications/messages"
 import { useAuthStore } from "@/lib/stores/auth"
 import { useNotificationWsStatus } from "@/lib/stores/notification-ws-status"
 import { createNotificationSocket } from "@/lib/ws/notification-socket"
@@ -42,24 +43,9 @@ import type {
   NotificationSocketHandle,
   NotificationSocketStatus,
 } from "@/lib/ws/notification-socket"
-import type { NotificationResponse, NotificationType } from "@/types/notification"
+import type { NotificationResponse } from "@/types/notification"
 import { shouldShowToast } from "@/types/notification"
 import type { NotificationWsEvent } from "@/types/ws"
-
-/** Short toast title per notification type (fallback to response `title`). */
-const TYPE_TOAST_TITLE: Partial<Record<NotificationType, string>> = {
-  APPOINTMENT_CONFIRMED: "Termin potvrđen",
-  APPOINTMENT_REJECTED: "Termin odbijen",
-  APPOINTMENT_CANCELLED: "Termin otkazan",
-  APPOINTMENT_REMINDER_1H: "Podsetnik: termin za 1h",
-  WAITLIST_OFFER: "Slot dostupan",
-  STRIKE_ADDED: "Dobili ste strike",
-  BLOCK_ACTIVATED: "Blokada aktivirana",
-  BLOCK_LIFTED: "Blokada skinuta",
-  DOCUMENT_REQUEST_APPROVED: "Zahtev odobren",
-  DOCUMENT_REQUEST_REJECTED: "Zahtev odbijen",
-  BROADCAST: "Obaveštenje",
-}
 
 export function NotificationStream(): null {
   const accessToken = useAuthStore((s) => s.accessToken)
@@ -97,10 +83,12 @@ export function NotificationStream(): null {
         // Still invalidate — the server may filter differently (unread_only etc.).
         qc.invalidateQueries({ queryKey: NOTIFICATION_LIST_KEY })
 
-        // Toast for critical types per schema §4.4.
+        // Toast for critical types per schema §4.4 — naslov iz centralne
+        // copy mape (lib/notifications/messages.ts), body je pun text iz
+        // backenda. KORAK 7 polish: dodajemo `action` koja vodi na
+        // /notifikacije (ako bude implementirano) ili u tihom no-op.
         if (shouldShowToast(notif.type)) {
-          const title = TYPE_TOAST_TITLE[notif.type] ?? notif.title
-          toast.message(title, { description: notif.body })
+          toast.message(getToastTitle(notif.type), { description: notif.body })
         }
         return
       }

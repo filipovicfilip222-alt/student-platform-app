@@ -1,19 +1,20 @@
-﻿/**
- * (student)/appointments/[id]/page.tsx — Full appointment detail.
+/**
+ * (appointment)/appointments/[id]/page.tsx — Shared appointment detail.
  *
- * ROADMAP 3.6 / Faza 3.6.
+ * Renders the same full detail view (status + topic + description, optional
+ * participants list, file list with upload, ticket chat) for every
+ * authenticated party of an appointment:
  *
- * Layout:
- *   - Left column (lg:col-span-2):
- *       · Header (status + topic + description + rejection reason)
- *       · Participant list (visible only when `is_group=true`)
- *       · File list (view + upload for non-terminal statuses)
- *   - Right column (lg:col-span-1):
- *       · TicketChat (polling fallback until ROADMAP 4.1 WS)
- *       · Cancel button (only for upcoming PENDING/APPROVED)
+ *   - The lead student who booked the slot (sees "Otkaži termin" while
+ *     status is PENDING or APPROVED — same flow as before, calls the
+ *     student-side cancel endpoint that adds a strike for late cancels).
+ *   - The professor who owns the slot, or the asistent the request was
+ *     delegated to (sees a separate "Otkaži termin" path that calls the
+ *     professor portal cancel endpoint, only available on APPROVED).
  *
- * The detail endpoint (`GET /appointments/{id}`) is ROADMAP 3.6 — so we
- * gracefully show a placeholder when the backend returns 404.
+ * Backend RBAC on `/appointments/{id}` ensures only the parties involved
+ * can fetch the detail, so a foreign user landing on the URL gets a 404
+ * which we render as a soft empty state.
  */
 
 "use client"
@@ -28,6 +29,7 @@ import { AppointmentDetailHeader } from "@/components/appointments/appointment-d
 import { FileList } from "@/components/appointments/file-list"
 import { ParticipantList } from "@/components/appointments/participant-list"
 import { TicketChat } from "@/components/chat/ticket-chat"
+import { RequestRejectDialog } from "@/components/professor/request-reject-dialog"
 import { EmptyState } from "@/components/shared/empty-state"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -36,6 +38,8 @@ import {
   useAppointmentDetail,
   useCancelAppointment,
 } from "@/lib/hooks/use-appointments"
+import { useCancelRequest } from "@/lib/hooks/use-requests-inbox"
+import { useAuthStore } from "@/lib/stores/auth"
 import { toastApiError, toastSuccess } from "@/lib/utils/errors"
 import type { AppointmentResponse, AppointmentStatus } from "@/types"
 
@@ -46,9 +50,16 @@ export default function AppointmentDetailPage() {
   const router = useRouter()
   const appointmentId = params?.id ?? null
 
+  const role = useAuthStore((s) => s.user?.role)
+  const isStudent = role === "STUDENT"
+  const isStaff = role === "PROFESOR" || role === "ASISTENT"
+
   const detailQuery = useAppointmentDetail(appointmentId)
-  const cancelMutation = useCancelAppointment()
-  const [showCancel, setShowCancel] = useState(false)
+  const studentCancel = useCancelAppointment()
+  const staffCancel = useCancelRequest()
+
+  const [showStudentCancel, setShowStudentCancel] = useState(false)
+  const [showStaffCancel, setShowStaffCancel] = useState(false)
 
   if (detailQuery.isLoading) {
     return (
@@ -75,7 +86,9 @@ export default function AppointmentDetailPage() {
               Nazad
             </Button>
             <Button asChild>
-              <Link href={ROUTES.myAppointments}>Moji termini</Link>
+              <Link href={isStaff ? ROUTES.professorDashboard : ROUTES.myAppointments}>
+                {isStaff ? "Profesor dashboard" : "Moji termini"}
+              </Link>
             </Button>
           </div>
         }
@@ -85,7 +98,14 @@ export default function AppointmentDetailPage() {
 
   const appointment = detailQuery.data
   const isTerminal = TERMINAL.includes(appointment.status)
-  const canCancel = !isTerminal
+
+  // Student can cancel anything not yet terminal (PENDING or APPROVED) —
+  // late-cancel strike logic lives on the backend.
+  const canStudentCancel = isStudent && !isTerminal
+
+  // Staff can cancel only an already-confirmed slot (APPROVED). Rejecting
+  // a PENDING request goes through the inbox row dropdown, not here.
+  const canStaffCancel = isStaff && appointment.status === "APPROVED"
 
   const simpleAppointment: AppointmentResponse = {
     id: appointment.id,
@@ -101,14 +121,27 @@ export default function AppointmentDetailPage() {
     created_at: appointment.created_at,
   }
 
-  function handleConfirmCancel() {
-    cancelMutation.mutate(appointment.id, {
+  function handleStudentConfirmCancel() {
+    studentCancel.mutate(appointment.id, {
       onSuccess: () => {
         toastSuccess("Termin je otkazan.")
-        setShowCancel(false)
+        setShowStudentCancel(false)
       },
       onError: (err) => toastApiError(err, "Greška pri otkazivanju termina."),
     })
+  }
+
+  function handleStaffConfirmCancel(reason: string) {
+    staffCancel.mutate(
+      { id: appointment.id, reason },
+      {
+        onSuccess: () => {
+          toastSuccess("Termin je otkazan i student je obavešten.")
+          setShowStaffCancel(false)
+        },
+        onError: (err) => toastApiError(err, "Greška pri otkazivanju termina."),
+      }
+    )
   }
 
   return (
@@ -124,12 +157,23 @@ export default function AppointmentDetailPage() {
           <ArrowLeft aria-hidden />
           Nazad
         </Button>
-        {canCancel && (
+        {canStudentCancel && (
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => setShowCancel(true)}
+            onClick={() => setShowStudentCancel(true)}
+          >
+            <X aria-hidden />
+            Otkaži termin
+          </Button>
+        )}
+        {canStaffCancel && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowStaffCancel(true)}
           >
             <X aria-hidden />
             Otkaži termin
@@ -160,11 +204,26 @@ export default function AppointmentDetailPage() {
       </div>
 
       <AppointmentCancelDialog
-        open={showCancel}
-        onOpenChange={setShowCancel}
-        appointment={showCancel ? simpleAppointment : null}
-        onConfirm={handleConfirmCancel}
-        isPending={cancelMutation.isPending}
+        open={showStudentCancel}
+        onOpenChange={setShowStudentCancel}
+        appointment={showStudentCancel ? simpleAppointment : null}
+        onConfirm={handleStudentConfirmCancel}
+        isPending={studentCancel.isPending}
+      />
+
+      {/* Staff cancel — reuses the reject dialog because the UX is identical:
+          mandatory reason that ends up in the rejection_reason column and
+          is forwarded to the student via the existing notification template. */}
+      <RequestRejectDialog
+        open={showStaffCancel}
+        onOpenChange={setShowStaffCancel}
+        appointment={showStaffCancel ? simpleAppointment : null}
+        onConfirm={handleStaffConfirmCancel}
+        isPending={staffCancel.isPending}
+        title="Otkaži odobreni termin"
+        description="Student će dobiti obaveštenje sa razlogom otkazivanja. Obavezno unesite kratko obrazloženje."
+        confirmLabel="Otkaži termin"
+        reasonLabel="Razlog otkazivanja"
       />
     </div>
   )

@@ -1,8 +1,8 @@
 # Frontend struktura — Studentska Platforma (FON/ETF)
 
-**Verzija:** 1.0
+**Verzija:** 1.1 (sesija 2026-04-26 — vidi § 8 za changelog)
 **Referentni dokumenti:** `docs/PRD_Studentska_Platforma.md`, `docs/Arhitektura_i_Tehnoloski_Stek.md`, `docs/ROADMAP.md`, `docs/copilot_plan_prompt.md`
-**Stack:** Next.js 14 (App Router) · TypeScript · Tailwind CSS · Shadcn/ui · TanStack Query · Zustand · React Hook Form + Zod · Axios · FullCalendar · socket.io-client · next-pwa
+**Stack:** Next.js 14 (App Router) · TypeScript · **Tailwind CSS v4** · Shadcn/ui · TanStack Query · Zustand · React Hook Form + Zod · Axios · FullCalendar · socket.io-client · next-pwa
 
 Ovaj dokument opisuje **kompletnu ciljnu strukturu** `frontend/` direktorijuma — šta postoji, šta fali i kako treba organizovati. Sinhronizovan sa stanjem iz `ROADMAP.md`. Svaki novi fajl u frontendu treba da se uklapa u jednu od kategorija ispod.
 
@@ -44,17 +44,21 @@ frontend/
 │   │   ├── dashboard/page.tsx              # kartice: sledeći termini, notifikacije, strike status
 │   │   ├── search/page.tsx                 # pretraga profesora + filter
 │   │   ├── professor/[id]/page.tsx         # profil + FAQ + BookingCalendar
-│   │   ├── appointments/[id]/page.tsx      # detalj + chat + fajlovi (deljena sa profesorom)
 │   │   ├── my-appointments/page.tsx        # tabs Upcoming/History
 │   │   └── document-requests/page.tsx      # forma + lista mojih zahteva
 │   │
+│   ├── (appointment)/                      # SHARED — STUDENT/PROFESOR/ASISTENT (vidi § 3.1)
+│   │   ├── layout.tsx                      # client component, čita rolu iz Zustand-a
+│   │   │                                   # i prosleđuje je <AppShell role="..."> dinamički
+│   │   └── appointments/[id]/page.tsx      # detalj + chat + fajlovi + (uslovni) Otkaži flow
+│   │                                       # student → AppointmentCancelDialog (strike < 12h)
+│   │                                       # profesor/asistent → reuse RequestRejectDialog (razlog)
+│   │
 │   ├── (professor)/                        # role PROFESOR + ASISTENT
 │   │   ├── layout.tsx                      # <AppShell role="PROFESOR">
-│   │   ├── professor/
-│   │   │   ├── dashboard/page.tsx          # Tabs: Inbox zahteva | Moj kalendar
-│   │   │   └── settings/page.tsx           # Tabs: Profil | FAQ | Canned | Blackout
-│   │   └── appointments/[id]/page.tsx      # re-export iz (student) ili shared komponenta
-│   │                                       # (može se koristiti ista stranica — RBAC je u backend-u)
+│   │   └── professor/
+│   │       ├── dashboard/page.tsx          # Tabs: Inbox zahteva | Moj kalendar
+│   │       └── settings/page.tsx           # Tabs: Profil | FAQ | Canned | Blackout
 │   │
 │   └── (admin)/                            # rola ADMIN
 │       ├── layout.tsx                      # <AppShell role="ADMIN">
@@ -281,12 +285,19 @@ frontend/
 │
 ├── middleware.ts                           # Next.js middleware — redirect za nelogovane + rbac guard
 ├── next.config.mjs                         # next-pwa config (Faza 5) + env eksponovanje
-├── tailwind.config.ts                      # shadcn preset + custom boje (fakulteti)
+├── postcss.config.mjs                      # Tailwind v4 plugin: { "@tailwindcss/postcss": {} }
 ├── tsconfig.json                           # path aliasi `@/*` → `./`
-├── components.json                         # shadcn/ui config
-├── package.json
+├── components.json                         # shadcn/ui config (config: "" — v4 nema tailwind.config.ts)
+├── package.json                            # tailwindcss ^4 + @tailwindcss/postcss ^4
 └── .env.example                            # NEXT_PUBLIC_API_URL, NEXT_PUBLIC_WS_URL, itd.
 ```
+
+> **Tailwind v4 (od 2026-04-26):** `tailwind.config.ts` više **ne postoji** — sva
+> tema je deklarisana u `app/globals.css` kroz `@theme inline { --color-*: var(--*) }`
+> i `@custom-variant dark (&:where(.dark, .dark *))`. Migracija je urađena
+> jer su `shadcn/ui` komponente generisale v4 sintaksu (`w-(--var)`,
+> `data-state:` selektori, `outline-hidden` itd.) koju v3 PostCSS plugin nije
+> kompajlirao — rezultat je bio nevidljiv dropdown content. Detalji u § 8.
 
 ---
 
@@ -294,14 +305,18 @@ frontend/
 
 ### 3.1 Route groupe i layouti
 
-Next.js 14 App Router route groupe `(auth)`, `(student)`, `(professor)`, `(admin)` **ne utiču na URL**, samo na to koji layout se primenjuje. Svaka grupa ima svoj `layout.tsx`:
+Next.js 14 App Router route groupe `(auth)`, `(student)`, `(appointment)`, `(professor)`, `(admin)` **ne utiču na URL**, samo na to koji layout se primenjuje. Svaka grupa ima svoj `layout.tsx`:
 
 - `(auth)/layout.tsx` — centrirana kartica, bez sidebar-a. Eksportuje `ReactNode` direktno.
-- `(student|professor|admin)/layout.tsx` — omotava `<AppShell role="...">` oko `children`.
+- `(student|professor|admin)/layout.tsx` — server component, `ProtectedPage allowedRoles={[…]}` + `<AppShell role="…">` (rola fiksna, mapirana na grupu).
+- **`(appointment)/layout.tsx`** — `"use client"`, čita `useAuthStore((s) => s.user?.role)` i prosleđuje rolu `<AppShell>`-u dinamički. `ProtectedPage` dozvoljava STUDENT, PROFESOR i ASISTENT.
 
-**Appointment detail** (`/appointments/[id]`) postoji u `(student)` grupi, ali treba i profesoru. Dva pristupa:
-1. **Preporučeno:** ostaviti u `(student)` grupi — AppShell ionako gleda rolu iz auth store-a, a ne iz route group-e, pa se sidebar sam prilagodi.
-2. Alternativno: napraviti paralelnu `(professor)/appointments/[id]/page.tsx` koja re-eksportuje istu komponentu.
+**Appointment detail** (`/appointments/[id]`) je shared stranica koja prikazuje status, fajlove, chat, učesnike (grupne konsultacije). Tri različita auditorijuma — student koji je rezervisao slot, profesor čiji je slot, asistent kome je delegiran zahtev — koriste **istu** komponentu jer im je view 95% isti; razlikuje se samo Otkaži flow (vidi § 8.3 i § 8.6):
+
+- **Student** → `AppointmentCancelDialog` (potvrda bez razloga, bekend dodaje strike ako je < 12h do termina).
+- **Profesor / asistent** → `RequestRejectDialog` reuse-ovan sa custom title/description (obavezan razlog koji se snima u `rejection_reason` i šalje studentu kroz `send_appointment_rejected` Celery task).
+
+URL-ovi se ne preklapaju (route grupe su tu samo za layout) — `(appointment)/appointments/[id]` rezerviše URL `/appointments/[id]`, pa **ne sme** istovremeno postojati `(student)/appointments/[id]/page.tsx` (kompajler bi izbacio "duplicate route" grešku).
 
 ### 3.2 Middleware + zaštita ruta
 
@@ -559,7 +574,7 @@ Trenutno je UI na srpskom. Ako ikad bude engleski (V2), preporučuje se `next-in
 
 ## 7. Otvorena pitanja koja vredi razjasniti sa Stefanom
 
-1. **Appointment detail shared route** — ostaje samo u `(student)` grupi ili se pravi duplikat u `(professor)`? Preporuka: jedna stranica, RBAC iz bekenda.
+1. ~~**Appointment detail shared route** — ostaje samo u `(student)` grupi ili se pravi duplikat u `(professor)`?~~ **REŠENO 2026-04-26**: napravljen treći route group `(appointment)/` sa client layout-om koji bira `<AppShell role="...">` dinamički iz auth store-a. Vidi § 3.1 i § 8.3.
 2. **ChatSocketMessage vs NotificationSocketMessage** — JSON šeme za WS moraju biti u `docs/websocket-schema.md` pre Faze 4 (ROADMAP to traži).
 3. **Strike status u `/auth/me`** — ROADMAP 3.4 kaže "dodati `total_strike_points` u `UserResponse` šemu". Potvrditi sa Stefanom da se ne pravi zaseban endpoint.
 4. **Impersonation token format** — frontend mora znati kako da prepozna `imp` claim. `lib/utils/jwt.ts` samo dekodira payload (bez verifikacije) radi `useImpersonationStore`-a.
@@ -567,4 +582,133 @@ Trenutno je UI na srpskom. Ako ikad bude engleski (V2), preporučuje se `next-in
 
 ---
 
-*Dokument živi u `docs/FRONTEND_STRUKTURA.md`. Ažurirati kad god se doda nova route grupa, veća komponenta ili novi ključni lib modul.*
+## 8. Changelog — sesija 2026-04-26
+
+Spisak svih frontend izmena urađenih u jednoj radnoj sesiji. Listano hronološki kako bi naredna sesija imala kontekst zašto je svaka izmena tu.
+
+### 8.1 Tailwind CSS v3 → v4 migracija
+
+**Bug:** Klik na 3 tačkice / UserMenu / bell ikonicu pravio je DOM element sa `data-state="open"`, bez konzolnih grešaka, ali sadržaj nije bio vidljiv. Computed CSS na `DropdownMenuContent` je imao `position: static` umesto `absolute`, a Radix popper wrapper je bio na `transform: translate(0px, -200%)` (offscreen).
+
+**Uzrok:** `shadcn/ui` komponente su generisane sa Tailwind v4 sintaksom (`max-h-(--radix-dropdown-menu-content-available-height)`, `data-open:animate-in`, `outline-hidden`, `data-state:` selektori) koju v3 PostCSS plugin **nije kompajlirao** — utility klase su tiho izostavljane, pa Radix Floating UI nije mogao da pozicionira portal content.
+
+**Fix u sledećim fajlovima:**
+
+| Fajl | Promena |
+|------|---------|
+| `package.json` | `tailwindcss ^4.2.4`, `@tailwindcss/postcss ^4.2.4`; uklonjen `tailwindcss-animate` (zamenjen sa `tw-animate-css` koji je v4-compatible) |
+| `postcss.config.mjs` | Plugins → `{ "@tailwindcss/postcss": {} }`. Uklonjen `autoprefixer` jer Lightning CSS u Tailwind v4 to već radi. |
+| `tailwind.config.ts` | **Obrisan.** v4 ima zero-config auto-detection content-a + tema u CSS-u. |
+| `app/globals.css` | Prepisan: `@import "tailwindcss"`, `@custom-variant dark`, `@theme inline { --color-*: var(--*) }`, `:root` i `.dark` blokovi sa OKLCH varijablama (mirror-uju shadcn neutral preset). |
+| `components.json` | `"tailwind.config": ""` umesto putanje (config fajl ne postoji). |
+
+**Verifikacija:** Playwright skripta je inspect-ovala DOM nakon klika — `position` je `absolute`, popper wrapper ima izračunate koordinate, dropdown je vidljiv.
+
+### 8.2 `Button` forwardRef fix
+
+**Bug:** Čak i posle Tailwind v4 migracije, prvi klik na `<DropdownMenuTrigger asChild><Button>` nije pozicionirao content. React je u konzoli prijavljivao `Function components cannot be given refs.`.
+
+**Uzrok:** `frontend/components/ui/button.tsx` je bio plain function komponenta. Radix `asChild` koristi `Slot.Root` koji prosleđuje `ref` na decu — bez `React.forwardRef`-a, ref se gubio i Floating UI nije mogao da izmeri trigger.
+
+**Fix:** `Button` umotan u `React.forwardRef<HTMLButtonElement, ButtonProps>`, ref se prosleđuje na `Slot.Root` (kad je `asChild`) ili `<button>` (default). Dodat duži komentar uz sam wrapper koji objašnjava zašto.
+
+```tsx
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { className, variant, size, asChild = false, ...props }, ref
+) {
+  const Comp = asChild ? Slot.Root : "button"
+  return <Comp ref={ref} {...props} className={cn(buttonVariants({ variant, size, className }))} />
+})
+```
+
+**Side-effect:** isti fix je rešio i pozicioniranje za `PopoverTrigger`, `TooltipTrigger`, `SheetTrigger`, `DialogTrigger`, `HoverCardTrigger` — sve Radix primitive-e koje se koriste kroz `asChild` + `<Button>`.
+
+### 8.3 Novi `(appointment)` route group
+
+**Bug:** `(student)/appointments/[id]/page.tsx` je bila u student-only route grupi (`ProtectedPage allowedRoles={["STUDENT"]}`). Profesor koji je odobrio termin nije mogao da uđe na stranicu — bio je redirektovan na `/professor/dashboard` pre nego što stigne do nje.
+
+**Fix — file move + novi layout:**
+
+| Akcija | Fajl |
+|--------|------|
+| Obrisano | `frontend/app/(student)/appointments/[id]/page.tsx` |
+| Novo | `frontend/app/(appointment)/layout.tsx` (`"use client"`, čita rolu, AppShell prima rolu dinamički) |
+| Novo | `frontend/app/(appointment)/appointments/[id]/page.tsx` |
+
+URL `/appointments/[id]` ostaje isti — route grupe su samo layout grouping. Detalj-stranica sad razlikuje dva Otkaži flow-a:
+
+- `useAuthStore((s) => s.user?.role)` → `STUDENT` → `AppointmentCancelDialog` + `useCancelAppointment()` (hook iz `students.ts`).
+- `PROFESOR` ili `ASISTENT` → `RequestRejectDialog` reuse-ovan + `useCancelRequest()` (hook iz `use-requests-inbox.ts`, vidi § 8.6).
+- Cancel se pojavljuje samo na ne-terminalnim statusima za studenta i samo na APPROVED za profesora (PENDING zahteve profesor obrađuje kroz inbox dropdown — Odobri/Odbij/Delegiraj, ne Otkaži).
+
+### 8.4 `AppointmentCard` — chevron i actions zajedno
+
+**Bug:** U `my-appointments` listi, kartice koje imaju Otkaži dugme (`PENDING`/`APPROVED`) nisu bile klikabilne — `interactive={!canCancel}` je isključivao `<Link>` wrapping, pa student nije mogao da otvori chat/fajlove dok god ima cancel opciju.
+
+**Fix u `components/appointments/appointment-card.tsx`:**
+
+```tsx
+{actions || interactive ? (
+  <div className="flex shrink-0 items-center gap-2">
+    {actions}
+    {interactive && <ChevronRight className="hidden size-5 sm:block" aria-hidden />}
+  </div>
+) : null}
+```
+
+Chevron se renderuje pored akcija (umesto da budu mutually exclusive). U `(student)/my-appointments/page.tsx` je `interactive={!canCancel}` zamenjeno sa `interactive` (uvek true). `CancelButton` već zaustavlja propagaciju (`e.preventDefault(); e.stopPropagation()`) pa klik na njega ne otvara detail.
+
+### 8.5 `RequestInboxRow` — status-aware dropdown
+
+**Bug:** Profesor je u inbox dropdown-u uvek video "Odobri / Odbij / Delegiraj asistentu" — bez obzira na status reda. Klik na "Odbij" za APPROVED termin vraćao je 409 toast "Samo PENDING zahtevi mogu biti odbijeni." Nije postojala "Otkaži" putanja.
+
+**Fix u `components/professor/request-inbox-row.tsx`:**
+
+| Status | Stavke u dropdown-u |
+|--------|---------------------|
+| `PENDING` | Otvori termin · Odobri · Odbij · *(samo PROFESOR)* Delegiraj asistentu |
+| `APPROVED` | Otvori termin · **Otkaži termin** (destructive) |
+| `REJECTED` / `CANCELLED` / `COMPLETED` | Otvori termin (read-only) |
+
+"Otvori termin" je `<DropdownMenuItem asChild><Link href={ROUTES.appointment(id)}>` — direktno vodi na shared `(appointment)` stranicu (vidi § 8.3). Komponenta sad prima i `onCancel` callback propa pored postojećih `onApprove/onReject/onDelegate`.
+
+### 8.6 Cancel flow za profesora — frontend wiring
+
+**Backend:** dodat endpoint `POST /api/v1/professors/requests/{id}/cancel` (`backend/app/services/professor_portal_service.py::cancel_request`, šema `RequestCancelRequest{ reason }`). Validira da je status `APPROVED`, postavlja na `CANCELLED`, snima razlog u `rejection_reason`, reuse-uje `send_appointment_rejected` Celery task.
+
+**Frontend dodatci:**
+
+| Fajl | Promena |
+|------|---------|
+| `lib/api/professors.ts` | `cancelRequest(appointmentId, { reason })` (POST na novi endpoint) |
+| `lib/hooks/use-requests-inbox.ts` | `useCancelRequest()` — invalidira **i** `INBOX_KEY` **i** `["my-appointments"]` **i** `["appointment"]` (jer student takođe gleda isti termin) |
+| `components/professor/request-reject-dialog.tsx` | Dodate opcione props: `title`, `description`, `confirmLabel`, `reasonLabel`. Default vrednosti zadržavaju postojeći "Odbij zahtev" UX, override-i omogućavaju reuse za "Otkaži odobreni termin". |
+| `components/professor/requests-inbox.tsx` | Dodato `toCancel` state + `useCancelRequest()` mutation + drugi `<RequestRejectDialog>` instance sa `title="Otkaži odobreni termin"` / `confirmLabel="Otkaži termin"`. |
+| `app/(appointment)/appointments/[id]/page.tsx` | Isti reuse — kad profesor klikne "Otkaži termin" gore desno, otvara se reject dialog sa cancel copy-jem. |
+
+### 8.7 Sumarna lista promenjenih frontend fajlova
+
+```
+A  frontend/app/(appointment)/layout.tsx
+A  frontend/app/(appointment)/appointments/[id]/page.tsx
+D  frontend/app/(student)/appointments/[id]/page.tsx
+M  frontend/app/(student)/my-appointments/page.tsx
+M  frontend/components/appointments/appointment-card.tsx
+M  frontend/components/professor/request-inbox-row.tsx
+M  frontend/components/professor/request-reject-dialog.tsx
+M  frontend/components/professor/requests-inbox.tsx
+M  frontend/components/ui/button.tsx
+M  frontend/lib/api/professors.ts
+M  frontend/lib/hooks/use-requests-inbox.ts
+M  frontend/app/globals.css
+M  frontend/postcss.config.mjs
+M  frontend/components.json
+M  frontend/package.json
+D  frontend/tailwind.config.ts
+```
+
+(A = added, M = modified, D = deleted)
+
+---
+
+*Dokument živi u `docs/FRONTEND_STRUKTURA.md`. Ažurirati kad god se doda nova route grupa, veća komponenta ili novi ključni lib modul. Changelog sekcija (§ 8) raste po sesijama — ne brisati istorijske zapise, dodavati nove ispod.*

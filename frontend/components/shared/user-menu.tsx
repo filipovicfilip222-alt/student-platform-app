@@ -21,6 +21,7 @@ import { LogOut, User } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 import { PushSubscriptionToggle } from "@/components/notifications/push-subscription-toggle"
+import { ThemeToggle } from "@/components/shared/theme-toggle"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -105,6 +106,8 @@ export function UserMenu() {
           <User aria-hidden />
           Profil
         </DropdownMenuItem>
+
+        <ThemeToggle />
 
         <DropdownMenuSeparator />
 

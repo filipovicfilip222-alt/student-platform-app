@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/table"
 import {
   useApproveRequest,
+  useCancelRequest,
   useDelegateRequest,
   useRejectRequest,
   useRequestsInbox,
@@ -53,11 +54,13 @@ export function RequestsInbox() {
   const [toApprove, setToApprove] = useState<AppointmentResponse | null>(null)
   const [toReject, setToReject] = useState<AppointmentResponse | null>(null)
   const [toDelegate, setToDelegate] = useState<AppointmentResponse | null>(null)
+  const [toCancel, setToCancel] = useState<AppointmentResponse | null>(null)
 
   const inboxQuery = useRequestsInbox(filter)
   const approveMutation = useApproveRequest()
   const rejectMutation = useRejectRequest()
   const delegateMutation = useDelegateRequest()
+  const cancelMutation = useCancelRequest()
 
   const requests = inboxQuery.data ?? []
 
@@ -96,6 +99,20 @@ export function RequestsInbox() {
           setToDelegate(null)
         },
         onError: (err) => toastApiError(err, "Greška pri delegiranju."),
+      }
+    )
+  }
+
+  function handleCancel(reason: string) {
+    if (!toCancel) return
+    cancelMutation.mutate(
+      { id: toCancel.id, reason },
+      {
+        onSuccess: () => {
+          toastSuccess("Termin je otkazan i student je obavešten.")
+          setToCancel(null)
+        },
+        onError: (err) => toastApiError(err, "Greška pri otkazivanju termina."),
       }
     )
   }
@@ -171,6 +188,7 @@ export function RequestsInbox() {
                   onApprove={() => setToApprove(r)}
                   onReject={() => setToReject(r)}
                   onDelegate={() => setToDelegate(r)}
+                  onCancel={() => setToCancel(r)}
                 />
               ))}
             </TableBody>
@@ -198,6 +216,19 @@ export function RequestsInbox() {
         appointment={toDelegate}
         onConfirm={handleDelegate}
         isPending={delegateMutation.isPending}
+      />
+      {/* Cancel reuses the reject dialog — same UX (mandatory reason that
+          ends up in rejection_reason and is forwarded to the student). */}
+      <RequestRejectDialog
+        open={toCancel !== null}
+        onOpenChange={(open) => !open && setToCancel(null)}
+        appointment={toCancel}
+        onConfirm={handleCancel}
+        isPending={cancelMutation.isPending}
+        title="Otkaži odobreni termin"
+        description="Student će dobiti obaveštenje sa razlogom otkazivanja. Obavezno unesite kratko obrazloženje."
+        confirmLabel="Otkaži termin"
+        reasonLabel="Razlog otkazivanja"
       />
     </div>
   )

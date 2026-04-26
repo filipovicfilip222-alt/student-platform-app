@@ -71,21 +71,42 @@ async def search_professors(
         statement = statement.where(User.faculty == faculty)
 
     if q:
-        like = f"%{q.strip()}%"
+        # Diakritik-insensitive pretraga preko ``f_unaccent`` (migracija 0004).
+        # Wrapper transformiše „Petrović" → „Petrovic" i „Đorđević" →
+        # „Djordjevic", pa search „petrovic"/„djordjevic" matchuje. Obe
+        # strane (kolona i needle) idu kroz istu funkciju da bi rezultat
+        # bio simetričan. ``Subject.code`` je ASCII-only (npr. „IS101")
+        # pa ostaje plain ILIKE — ekstra wrapper bi bio no-op overhead.
+        # ``professors.areas_of_interest`` je TEXT[] pa koristimo
+        # ``f_unaccent_array`` koji enkapsulira ``array_to_string`` +
+        # ``f_unaccent``.
+        needle = f"%{q.strip()}%"
+        unaccent_needle = func.f_unaccent(needle)
         statement = statement.where(
             or_(
-                User.first_name.ilike(like),
-                User.last_name.ilike(like),
-                func.concat(User.first_name, " ", User.last_name).ilike(like),
-                Professor.department.ilike(like),
-                Subject.name.ilike(like),
-                Subject.code.ilike(like),
+                func.f_unaccent(User.first_name).ilike(unaccent_needle),
+                func.f_unaccent(User.last_name).ilike(unaccent_needle),
+                func.f_unaccent(
+                    func.concat(User.first_name, " ", User.last_name)
+                ).ilike(unaccent_needle),
+                func.f_unaccent(Professor.department).ilike(unaccent_needle),
+                func.f_unaccent_array(Professor.areas_of_interest).ilike(
+                    unaccent_needle
+                ),
+                func.f_unaccent(Subject.name).ilike(unaccent_needle),
+                Subject.code.ilike(needle),
             )
         )
 
     if subject:
-        subject_like = f"%{subject.strip()}%"
-        statement = statement.where(or_(Subject.name.ilike(subject_like), Subject.code.ilike(subject_like)))
+        subject_needle = f"%{subject.strip()}%"
+        unaccent_subject_needle = func.f_unaccent(subject_needle)
+        statement = statement.where(
+            or_(
+                func.f_unaccent(Subject.name).ilike(unaccent_subject_needle),
+                Subject.code.ilike(subject_needle),
+            )
+        )
 
     if consultation_type is not None:
         has_slot_of_type = exists(

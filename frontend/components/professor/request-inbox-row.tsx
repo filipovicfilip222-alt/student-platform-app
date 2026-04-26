@@ -2,14 +2,26 @@
  * request-inbox-row.tsx — Single table row in the professor inbox.
  *
  * ROADMAP 3.7 / Faza 4 (frontend). Displays student summary, slot time,
- * topic + truncated description. Action column exposes Approve / Reject /
- * Delegate through a dropdown menu — parent component decides which
- * dialog to open.
+ * topic + truncated description.
+ *
+ * The action column exposes a status-aware dropdown:
+ *
+ *   PENDING     → Otvori termin · Odobri · Odbij · (PROFESOR) Delegiraj
+ *   APPROVED    → Otvori termin · Otkaži termin
+ *   REJECTED /  → Otvori termin (read-only)
+ *   CANCELLED /
+ *   COMPLETED
+ *
+ * Picking the right action up-front (instead of letting the user click
+ * "Odbij" on an APPROVED termin and getting a 409 "Samo PENDING zahtevi
+ * mogu biti odbijeni." toast) is the whole point of the redesign — the
+ * professor was hitting that conflict and had no obvious cancel path.
  */
 
 "use client"
 
-import { Check, MoreHorizontal, Share2, X } from "lucide-react"
+import Link from "next/link"
+import { Check, Eye, MoreHorizontal, Share2, X } from "lucide-react"
 
 import { AppointmentStatusBadge } from "@/components/appointments/appointment-status-badge"
 import { RoleGate } from "@/components/shared/role-gate"
@@ -23,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { TableCell, TableRow } from "@/components/ui/table"
+import { ROUTES } from "@/lib/constants/routes"
 import { topicCategoryLabel } from "@/lib/constants/topic-categories"
 import { formatDateTime } from "@/lib/utils/date"
 import type { AppointmentResponse } from "@/types"
@@ -32,6 +45,7 @@ export interface RequestInboxRowProps {
   onApprove: () => void
   onReject: () => void
   onDelegate: () => void
+  onCancel: () => void
 }
 
 export function RequestInboxRow({
@@ -39,7 +53,11 @@ export function RequestInboxRow({
   onApprove,
   onReject,
   onDelegate,
+  onCancel,
 }: RequestInboxRowProps) {
+  const isPending = appointment.status === "PENDING"
+  const isApproved = appointment.status === "APPROVED"
+
   return (
     <TableRow>
       <TableCell className="font-medium">
@@ -73,24 +91,49 @@ export function RequestInboxRow({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Akcije</DropdownMenuLabel>
-            <DropdownMenuItem onSelect={() => onApprove()}>
-              <Check aria-hidden />
-              Odobri
+
+            <DropdownMenuItem asChild>
+              <Link href={ROUTES.appointment(appointment.id)}>
+                <Eye aria-hidden />
+                Otvori termin
+              </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem
-              variant="destructive"
-              onSelect={() => onReject()}
-            >
-              <X aria-hidden />
-              Odbij
-            </DropdownMenuItem>
-            <RoleGate allowedRoles={["PROFESOR"]}>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => onDelegate()}>
-                <Share2 aria-hidden />
-                Delegiraj asistentu
-              </DropdownMenuItem>
-            </RoleGate>
+
+            {isPending && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => onApprove()}>
+                  <Check aria-hidden />
+                  Odobri
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => onReject()}
+                >
+                  <X aria-hidden />
+                  Odbij
+                </DropdownMenuItem>
+                <RoleGate allowedRoles={["PROFESOR"]}>
+                  <DropdownMenuItem onSelect={() => onDelegate()}>
+                    <Share2 aria-hidden />
+                    Delegiraj asistentu
+                  </DropdownMenuItem>
+                </RoleGate>
+              </>
+            )}
+
+            {isApproved && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => onCancel()}
+                >
+                  <X aria-hidden />
+                  Otkaži termin
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </TableCell>

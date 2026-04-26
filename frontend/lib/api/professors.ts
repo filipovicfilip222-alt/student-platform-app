@@ -90,6 +90,16 @@ export const professorsApi = {
       )
       .then((r) => r.data),
 
+  // Profesor / asistent otkazuje već odobreni termin (status APPROVED).
+  // Backend symmetric pair to studentsApi.cancelAppointment.
+  cancelRequest: (appointmentId: Uuid, data: { reason: string }) =>
+    api
+      .post<AppointmentResponse>(
+        `/professors/requests/${appointmentId}/cancel`,
+        data
+      )
+      .then((r) => r.data),
+
   // TODO: backend endpoint not yet implemented (ROADMAP 3.7)
   delegateRequest: (appointmentId: Uuid, data: { assistant_id: Uuid }) =>
     api

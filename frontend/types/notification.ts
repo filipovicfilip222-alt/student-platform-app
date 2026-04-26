@@ -83,3 +83,94 @@ export const TOAST_NOTIFICATION_TYPES: ReadonlySet<NotificationType> = new Set([
 export function shouldShowToast(type: NotificationType): boolean {
   return TOAST_NOTIFICATION_TYPES.has(type)
 }
+
+// ── Web Push (KORAK 1 Prompta 2 / PRD §5.3) ─────────────────────────────────
+
+/**
+ * The two ECDH keys returned by `PushSubscription.toJSON()` in the browser.
+ * Both are base64url-encoded strings without padding (Web Push API spec).
+ *
+ * Field names match the browser-emitted JSON shape verbatim — `p256dh` and
+ * `auth`. Backend Pydantic mirror MUST keep the same names so we can pass
+ * through `JSON.stringify(subscription)` without remapping.
+ */
+export interface WebPushKeys {
+  p256dh: string
+  auth: string
+}
+
+/**
+ * Body of `POST /api/v1/notifications/subscribe`.
+ *
+ * The browser yields a `PushSubscription` object whose JSON representation
+ * already matches `{ endpoint, keys: { p256dh, auth } }`. We layer one
+ * optional `user_agent` field on top for debug diagnostics (which device
+ * accepted push); the browser never gives this directly so the frontend
+ * sources it from `navigator.userAgent`.
+ */
+export interface PushSubscribeRequest {
+  endpoint: string
+  keys: WebPushKeys
+  user_agent?: string | null
+}
+
+/**
+ * Body of `POST /api/v1/notifications/unsubscribe`.
+ *
+ * Endpoint alone is enough — backend filters by `(user_id, endpoint)`
+ * UNIQUE constraint, so we don't need to re-send the keys.
+ */
+export interface PushUnsubscribeRequest {
+  endpoint: string
+}
+
+/**
+ * Response of `GET /api/v1/notifications/vapid-public-key`.
+ *
+ * `public_key` is base64url-encoded raw EC P-256 public key (65 bytes
+ * uncompressed — `\x04` || X || Y). The browser's
+ * `pushManager.subscribe({ applicationServerKey })` expects this exact
+ * format after `urlBase64ToUint8Array` decoding.
+ */
+export interface VapidPublicKeyResponse {
+  public_key: string
+}
+
+/**
+ * Lightweight DB row mirror returned by `subscribe` for diagnostics.
+ *
+ * The frontend doesn't render this anywhere in V1 — we keep the response
+ * non-empty so the hook can detect successful UPSERT vs. error without
+ * relying on HTTP-status sniffing.
+ */
+export interface PushSubscriptionResponse {
+  id: Uuid
+  endpoint: string
+  created_at: IsoDateTime
+}
+
+/**
+ * Slack/Discord-style trimmed push payload sent by `pywebpush` to the
+ * push service and unwrapped inside the service worker `push` event
+ * handler. We deliberately keep this small (≤200 bytes typical) to:
+ *   - stay well under the 4KB Web Push payload cap,
+ *   - avoid leaking the full `body` of sensitive notifications to the
+ *     OS notification center (privacy — full text is fetched fresh on
+ *     SW `notificationclick` via the in-app stream / REST GET),
+ *   - keep over-the-air bandwidth low on metered mobile data.
+ *
+ * Field semantics:
+ *   title — bell title (≤80 chars trimmed by backend if longer).
+ *   body  — short summary (≤140 chars trimmed by backend).
+ *   url   — absolute deep link the SW opens on `notificationclick`.
+ *   type  — `NotificationType` literal; SW uses it for icon/badge selection.
+ *   tag   — Web Push `tag` (newer payload with same tag REPLACES older one
+ *           in OS notification tray — prevents reminder spam).
+ */
+export interface PushNotificationPayload {
+  title: string
+  body: string
+  url: string
+  type: NotificationType
+  tag: string
+}

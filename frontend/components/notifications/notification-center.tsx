@@ -1,22 +1,20 @@
 /**
- * notification-center.tsx — Bell button in the top-bar with a popover
- * dropdown of the last ~10 notifications.
+ * notification-center.tsx — Bell button u top-bar-u sa popover dropdown-om.
  *
- * ROADMAP 4.2 / 4.7 (Phase 5).
- *
- * Data flow:
- *  - `useUnreadCount()` and `useNotifications({ limit: 10 })` both fall
- *    back to 30 s REST polling until `<NotificationStream />` flips the
- *    WS status flag (see use-notifications.ts + notification-stream.tsx).
- *  - `useMarkRead` / `useMarkAllRead` update the cache optimistically.
- *
- * The bell is disabled (aria-disabled) while the user is unauthenticated
- * so nothing fires before `SessionRestorer` populates the auth store.
+ * KORAK 7 (StudentPlus polish):
+ *   - Bell + count koristi `<NotificationBadge />` sa pulse animacijom.
+ *   - Header: "Notifikacije" + "{N} nepročitanih" / "Sve je pročitano".
+ *   - Footer: "Označi sve kao pročitano" (samo ako ima unread)
+ *     + "Pogledaj sve" link (deep link na /notifikacije ako postoji,
+ *     inače je sakriven do Phase 6).
+ *   - Empty state: friendly poruka + Bell ikona, ne goli text.
+ *   - Skeleton: 3 reda sa grid-style placeholder-ima koji liče na prave
+ *     items (ne goli pravougaonici).
  */
 
 "use client"
 
-import { Bell, CheckCheck } from "lucide-react"
+import { Bell, BellOff, CheckCheck } from "lucide-react"
 
 import {
   Popover,
@@ -26,7 +24,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { Skeleton } from "@/components/ui/skeleton"
 import {
   useMarkAllRead,
   useMarkRead,
@@ -36,6 +33,7 @@ import {
 import { useAuthStore } from "@/lib/stores/auth"
 import { toastApiError } from "@/lib/utils/errors"
 
+import { NotificationBadge } from "./notification-badge"
 import { NotificationItem } from "./notification-item"
 
 const DROPDOWN_LIMIT = 10
@@ -54,7 +52,8 @@ export function NotificationCenter() {
 
   function handleMarkRead(id: string) {
     markRead.mutate(id, {
-      onError: (err) => toastApiError(err, "Neuspešno označavanje notifikacije."),
+      onError: (err) =>
+        toastApiError(err, "Neuspešno označavanje notifikacije."),
     })
   }
 
@@ -92,55 +91,38 @@ export function NotificationCenter() {
               : "Notifikacije"
           }
         >
-          <Bell aria-hidden />
-          {hasUnread && (
-            <span
-              className="absolute -right-0.5 -top-0.5 flex size-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground"
-              aria-hidden
-            >
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
+          <NotificationBadge count={unreadCount} />
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" sideOffset={8} className="w-[360px] p-0">
-        <div className="flex items-center justify-between gap-2 px-3 py-2">
+      <PopoverContent
+        align="end"
+        sideOffset={8}
+        className="w-[380px] overflow-hidden p-0"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between gap-2 px-4 py-3">
           <div className="min-w-0">
             <p className="text-sm font-semibold">Notifikacije</p>
             <p className="text-xs text-muted-foreground">
-              {hasUnread ? `${unreadCount} nepročitanih` : "Sve je pročitano"}
+              {hasUnread
+                ? `${unreadCount} ${unreadCount === 1 ? "nepročitana" : "nepročitanih"}`
+                : "Sve je pročitano"}
             </p>
           </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={handleMarkAllRead}
-            disabled={!hasUnread || markAllRead.isPending}
-          >
-            <CheckCheck aria-hidden />
-            Pročitaj sve
-          </Button>
         </div>
 
         <Separator />
 
+        {/* Body */}
         <ScrollArea className="max-h-[420px]">
-          <div className="p-1">
+          <div className="p-1.5">
             {listQuery.isLoading ? (
-              <div className="space-y-2 p-2">
-                <Skeleton className="h-14 w-full rounded-md" />
-                <Skeleton className="h-14 w-full rounded-md" />
-                <Skeleton className="h-14 w-full rounded-md" />
-              </div>
+              <SkeletonList />
             ) : listQuery.isError ? (
-              <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-                Notifikacije trenutno nisu dostupne. Pokušajte ponovo kasnije.
-              </p>
+              <ErrorState />
             ) : notifications.length === 0 ? (
-              <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-                Još uvek nemate notifikacije.
-              </p>
+              <EmptyState />
             ) : (
               <ul className="space-y-0.5">
                 {notifications.map((n) => (
@@ -156,7 +138,86 @@ export function NotificationCenter() {
           </div>
         </ScrollArea>
 
+        {/* Footer */}
+        {hasUnread && (
+          <>
+            <Separator />
+            <div className="px-2 py-1.5">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="w-full justify-center"
+                onClick={handleMarkAllRead}
+                disabled={markAllRead.isPending}
+              >
+                <CheckCheck aria-hidden />
+                Označi sve kao pročitano
+              </Button>
+            </div>
+          </>
+        )}
       </PopoverContent>
     </Popover>
+  )
+}
+
+/* ── Helpers ────────────────────────────────────────────────────────────── */
+
+function SkeletonList() {
+  return (
+    <ul className="space-y-1.5 p-2">
+      {[0, 1, 2].map((i) => (
+        <li
+          key={i}
+          className="flex items-start gap-3 rounded-md px-3 py-2.5"
+          aria-hidden
+        >
+          <div className="size-9 shrink-0 animate-pulse rounded-full bg-muted" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-3 w-3/5 animate-pulse rounded bg-muted" />
+            <div className="h-2.5 w-4/5 animate-pulse rounded bg-muted" />
+          </div>
+          <div className="h-2 w-10 animate-pulse rounded bg-muted" />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+      <div
+        aria-hidden
+        className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"
+      >
+        <Bell className="size-5" />
+      </div>
+      <p className="text-sm font-medium text-foreground">
+        Trenutno nema notifikacija
+      </p>
+      <p className="max-w-[28ch] text-xs text-muted-foreground">
+        Ovde ćemo vam javiti za nove zahteve, podsetnike i ažuriranja.
+      </p>
+    </div>
+  )
+}
+
+function ErrorState() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+      <div
+        aria-hidden
+        className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground"
+      >
+        <BellOff className="size-5" />
+      </div>
+      <p className="text-sm font-medium text-foreground">
+        Notifikacije trenutno nisu dostupne
+      </p>
+      <p className="max-w-[30ch] text-xs text-muted-foreground">
+        Pokušaćemo ponovo kroz par sekundi.
+      </p>
+    </div>
   )
 }

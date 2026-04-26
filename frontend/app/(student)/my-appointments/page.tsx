@@ -21,6 +21,7 @@ import { CalendarPlus, CalendarRange, X } from "lucide-react"
 import { AppointmentCancelDialog } from "@/components/appointments/appointment-cancel-dialog"
 import { AppointmentCard } from "@/components/appointments/appointment-card"
 import { EmptyState } from "@/components/shared/empty-state"
+import { ErrorState } from "@/components/shared/error-state"
 import { PageHeader } from "@/components/shared/page-header"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -149,10 +150,9 @@ function AppointmentList({
   }
   if (isError) {
     return (
-      <EmptyState
-        icon={CalendarRange}
-        title="Greška pri učitavanju"
-        description="Osvežite stranicu ili pokušajte ponovo."
+      <ErrorState
+        title="Termini trenutno nisu dostupni"
+        description="Osvežite stranicu ili pokušajte ponovo za par sekundi."
       />
     )
   }
@@ -175,7 +175,10 @@ function AppointmentList({
           <AppointmentCard
             key={appointment.id}
             appointment={appointment}
-            interactive={!canCancel}
+            // Card is always interactive so the student can open the
+            // detail page (chat + files). The Cancel button stops
+            // propagation so it doesn't trigger the wrapping <Link>.
+            interactive
             actions={
               canCancel ? (
                 <CancelButton onClick={() => onRequestCancel(appointment)} />

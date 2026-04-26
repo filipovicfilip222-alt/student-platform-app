@@ -86,13 +86,16 @@ export function AppointmentCard({
         </div>
       </div>
 
-      {actions ? (
-        <div className="flex shrink-0 items-center gap-2">{actions}</div>
-      ) : interactive ? (
-        <ChevronRight
-          className="hidden size-5 shrink-0 text-muted-foreground sm:block"
-          aria-hidden
-        />
+      {actions || interactive ? (
+        <div className="flex shrink-0 items-center gap-2">
+          {actions}
+          {interactive && (
+            <ChevronRight
+              className="hidden size-5 shrink-0 text-muted-foreground sm:block"
+              aria-hidden
+            />
+          )}
+        </div>
       ) : null}
     </CardContent>
   )

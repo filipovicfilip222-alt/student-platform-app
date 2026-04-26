@@ -2,7 +2,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, Response, status
 
-from app.core.dependencies import CurrentProfesor, CurrentProfesorOrAsistent, DBSession
+from app.core.dependencies import (
+    CurrentProfesor,
+    CurrentProfesorOrAsistent,
+    DBSession,
+    RedisClient,
+)
 from app.schemas.auth import MessageResponse
 from app.schemas.professor import (
     AssistantOptionResponse,
@@ -19,6 +24,7 @@ from app.schemas.professor import (
     FaqUpdate,
     ProfessorMeResponse,
     ProfessorProfileUpdate,
+    RequestCancelRequest,
     RequestDelegateRequest,
     RequestInboxRow,
     RequestRejectRequest,
@@ -52,17 +58,45 @@ async def get_slots(
 
 @router.post(
     "/slots",
-    response_model=SlotResponse,
+    response_model=list[SlotResponse],
     status_code=status.HTTP_201_CREATED,
-    summary="Kreiranje novog availability slota",
+    summary="Kreiranje availability slota (single ili recurring serija)",
+    description=(
+        "Vraća listu kreiranih slotova. Za single slot vraća listu sa "
+        "jednim elementom; za recurring rule vraća sve generisane slotove "
+        "sa istim `recurring_group_id`. Hard cap: 100 slotova po seriji "
+        "(422 'prevelik raspon'). 422 sa `conflicts` listom ako se neki "
+        "od generisanih slotova preklapa sa odobrenim terminom."
+    ),
 )
 async def create_slot(
     data: SlotCreate,
     db: DBSession,
     current_user: CurrentProfesor,
-) -> SlotResponse:
-    slot = await availability_service.create_slot(db, current_user, data)
-    return SlotResponse.model_validate(slot)
+    redis: RedisClient,
+) -> list[SlotResponse]:
+    slots = await availability_service.create_slot(db, current_user, data, redis)
+    return [SlotResponse.model_validate(slot) for slot in slots]
+
+
+@router.delete(
+    "/slots/recurring/{group_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Brisanje recurring grupe (samo budući slotovi)",
+    description=(
+        "Briše sve slotove sa `recurring_group_id == group_id` čije "
+        "`slot_datetime > now()`. Prošli slotovi se ne diraju (audit). "
+        "409 sa `conflicts` listom ako iko od budućih slotova ima "
+        "odobreni termin — profesor mora prvo da otkaže te termine."
+    ),
+)
+async def delete_recurring_group(
+    group_id: UUID,
+    db: DBSession,
+    current_user: CurrentProfesor,
+) -> Response:
+    await availability_service.delete_recurring_group(db, current_user, group_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.put(
@@ -104,8 +138,9 @@ async def create_blackout(
     data: BlackoutCreate,
     db: DBSession,
     current_user: CurrentProfesor,
+    redis: RedisClient,
 ) -> BlackoutResponse:
-    blackout = await availability_service.create_blackout(db, current_user, data)
+    blackout = await availability_service.create_blackout(db, current_user, data, redis)
     return BlackoutResponse.model_validate(blackout)
 
 
@@ -249,6 +284,37 @@ async def reject_request(
     current_user: CurrentProfesorOrAsistent,
 ) -> RequestInboxRow:
     item = await professor_portal_service.reject_request(db, current_user, appointment_id, data.reason)
+    return RequestInboxRow(
+        id=item.id,
+        slot_id=item.slot_id,
+        professor_id=item.professor_id,
+        lead_student_id=item.lead_student_id,
+        subject_id=item.subject_id,
+        topic_category=item.topic_category,
+        description=item.description,
+        status=item.status,
+        consultation_type=item.consultation_type,
+        slot_datetime=item.slot.slot_datetime,
+        created_at=item.created_at,
+        rejection_reason=item.rejection_reason,
+        delegated_to=item.delegated_to,
+    )
+
+
+@router.post(
+    "/requests/{appointment_id}/cancel",
+    response_model=RequestInboxRow,
+    summary="Otkazivanje već odobrenog termina (profesor/asistent)",
+)
+async def cancel_request(
+    appointment_id: UUID,
+    data: RequestCancelRequest,
+    db: DBSession,
+    current_user: CurrentProfesorOrAsistent,
+) -> RequestInboxRow:
+    item = await professor_portal_service.cancel_request(
+        db, current_user, appointment_id, data.reason
+    )
     return RequestInboxRow(
         id=item.id,
         slot_id=item.slot_id,

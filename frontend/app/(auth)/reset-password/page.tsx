@@ -1,22 +1,19 @@
 /**
- * (auth)/reset-password/page.tsx — Finish the password-reset flow.
+ * (auth)/reset-password/page.tsx — Završetak password-reset flow-a.
  *
- * ROADMAP 3.4 / Faza 3.1. Reads the `?token=...` query parameter from
- * the email link, accepts a new password + confirmation, and POSTs to
- * /auth/reset-password. On success the user is redirected to /login.
+ * `?token=...` query param dolazi iz email link-a; ako ne postoji,
+ * page renderuje fallback ekran sa CTA "zatraži novi link".
  *
- * Backend rules (mirrored in zod schema):
- *   - new_password: min 8, max 128 characters (schemas/auth.py)
- *   - token: opaque string, validity 1h — backend returns 422 on expired
- *     or used tokens
+ * Backend pravila (mirror u zod schemi):
+ *   - new_password: min 8, max 128 (schemas/auth.py)
+ *   - token: opaque string, 1h validity — backend vraća 422 na expired
  *
- * Uses `useSearchParams()` which requires a Suspense boundary (same
- * pattern as /login).
+ * `useSearchParams()` zahteva Suspense boundary (isti pattern kao /login).
  */
 
 "use client"
 
-import { Suspense, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useForm } from "react-hook-form"
@@ -25,15 +22,9 @@ import { z } from "zod"
 import { AlertTriangle, ArrowLeft, CheckCircle2, Loader2 } from "lucide-react"
 import type { AxiosError } from "axios"
 
+import { PasswordStrengthMeter } from "@/components/auth/password-strength-meter"
+import { Logo } from "@/components/shared/logo"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import {
   Form,
   FormControl,
@@ -42,9 +33,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 import { authApi } from "@/lib/api/auth"
 import { ROUTES } from "@/lib/constants/routes"
+import { cn } from "@/lib/utils"
 
 const resetPasswordSchema = z
   .object({
@@ -68,6 +60,7 @@ function ResetPasswordForm() {
 
   const [serverError, setServerError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [shakeKey, setShakeKey] = useState(0)
 
   const form = useForm<ResetPasswordFormValues>({
     resolver: zodResolver(resetPasswordSchema),
@@ -75,6 +68,11 @@ function ResetPasswordForm() {
   })
 
   const { isSubmitting } = form.formState
+  const passwordValue = form.watch("new_password")
+
+  useEffect(() => {
+    if (serverError) setShakeKey((k) => k + 1)
+  }, [serverError])
 
   async function onSubmit(values: ResetPasswordFormValues) {
     if (!token) {
@@ -98,152 +96,168 @@ function ResetPasswordForm() {
     }
   }
 
-  // ── Missing/invalid token — explicit UX, avoid exposing the form ────────────
+  // ── Missing/invalid token ─────────────────────────────────────────────
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
-        <Card className="w-full max-w-md shadow-lg">
-          <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-2xl font-bold">Link nije važeći</CardTitle>
-            <CardDescription>
-              Ovaj link za resetovanje lozinke ne sadrži token.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-6 py-8 text-center">
-              <AlertTriangle className="size-10 text-destructive" aria-hidden />
-              <p className="text-sm">
-                Otvorite link iz email poruke do kraja ili zatražite novi.
-              </p>
-            </div>
-          </CardContent>
-          <CardFooter className="flex-col gap-2">
-            <Button asChild className="w-full">
-              <Link href={ROUTES.forgotPassword}>Zatraži novi link</Link>
-            </Button>
-            <Button asChild variant="outline" className="w-full">
-              <Link href={ROUTES.login}>Nazad na prijavu</Link>
-            </Button>
-          </CardFooter>
-        </Card>
+      <div className="space-y-6">
+        <header className="space-y-3 text-center">
+          <Logo
+            variant="full"
+            size="lg"
+            className="mx-auto justify-center lg:hidden"
+          />
+          <h1 className="text-3xl font-bold tracking-tight">Link nije važeći</h1>
+          <p className="text-sm text-muted-foreground">
+            Ovaj link za resetovanje lozinke ne sadrži token.
+          </p>
+        </header>
+
+        <div className="flex flex-col items-center gap-4 rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">
+          <AlertTriangle className="size-12 text-destructive" aria-hidden />
+          <p className="text-sm">
+            Otvorite link iz email poruke do kraja ili zatražite novi.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <Button asChild className="w-full">
+            <Link href={ROUTES.forgotPassword}>Zatraži novi link</Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full">
+            <Link href={ROUTES.login}>Nazad na prijavu</Link>
+          </Button>
+        </div>
       </div>
     )
   }
 
-  // ── Success state — auto-redirect after 2s ─────────────────────────────────
+  // ── Success ───────────────────────────────────────────────────────────
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
-        <Card className="w-full max-w-md shadow-lg">
-          <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-2xl font-bold">Lozinka je resetovana</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center gap-3 rounded-md border border-primary/30 bg-primary/5 px-6 py-8 text-center">
-              <CheckCircle2 className="size-10 text-primary" aria-hidden />
-              <p className="text-sm">
-                Preusmeravamo vas na stranicu za prijavu...
-              </p>
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button asChild className="w-full">
-              <Link href={ROUTES.login}>Idi na prijavu odmah</Link>
-            </Button>
-          </CardFooter>
-        </Card>
+      <div className="space-y-6">
+        <header className="space-y-3 text-center">
+          <Logo
+            variant="full"
+            size="lg"
+            className="mx-auto justify-center lg:hidden"
+          />
+          <h1 className="text-3xl font-bold tracking-tight">Lozinka je resetovana</h1>
+        </header>
+
+        <div className="flex flex-col items-center gap-4 rounded-xl border border-success/30 bg-success/10 px-6 py-10 text-center">
+          <CheckCircle2 className="size-12 text-success" aria-hidden />
+          <p className="text-sm">Preusmeravamo vas na stranicu za prijavu…</p>
+        </div>
+
+        <Button asChild className="w-full">
+          <Link href={ROUTES.login}>Idi na prijavu odmah</Link>
+        </Button>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl font-bold">Nova lozinka</CardTitle>
-          <CardDescription>
-            Unesite novu lozinku za svoj nalog. Lozinka mora imati najmanje 8 karaktera.
-          </CardDescription>
-        </CardHeader>
+    <div
+      key={shakeKey}
+      className={cn("space-y-8", serverError && "animate-shake")}
+    >
+      <header className="space-y-3 text-center">
+        <Logo
+          variant="full"
+          size="lg"
+          className="mx-auto justify-center lg:hidden"
+        />
+        <h1 className="text-3xl font-bold tracking-tight">Nova lozinka</h1>
+        <p className="text-sm text-muted-foreground">
+          Lozinka mora imati najmanje 8 karaktera.
+        </p>
+      </header>
 
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              {serverError && (
-                <div className="rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
-                  {serverError}
-                </div>
-              )}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          {serverError && (
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            >
+              {serverError}
+            </div>
+          )}
 
-              <FormField
-                control={form.control}
-                name="new_password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nova lozinka</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="••••••••"
-                        autoComplete="new-password"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormField
+            control={form.control}
+            name="new_password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nova lozinka</FormLabel>
+                <FormControl>
+                  <PasswordInput
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    autoFocus
+                    {...field}
+                  />
+                </FormControl>
+                <PasswordStrengthMeter password={passwordValue ?? ""} />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <FormField
-                control={form.control}
-                name="confirm_password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Potvrdite lozinku</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="password"
-                        placeholder="••••••••"
-                        autoComplete="new-password"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormField
+            control={form.control}
+            name="confirm_password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Potvrdite lozinku</FormLabel>
+                <FormControl>
+                  <PasswordInput
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="animate-spin" />
-                    Resetujem...
-                  </>
-                ) : (
-                  "Resetuj lozinku"
-                )}
-              </Button>
-            </form>
-          </Form>
-        </CardContent>
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="animate-spin" />
+                Resetujem...
+              </>
+            ) : (
+              "Resetuj lozinku"
+            )}
+          </Button>
+        </form>
+      </Form>
 
-        <CardFooter className="justify-center text-sm text-muted-foreground">
-          <Link
-            href={ROUTES.login}
-            className="inline-flex items-center gap-1 font-medium text-primary hover:underline underline-offset-4"
-          >
-            <ArrowLeft className="size-3.5" aria-hidden />
-            Nazad na prijavu
-          </Link>
-        </CardFooter>
-      </Card>
+      <p className="text-center text-sm text-muted-foreground">
+        <Link
+          href={ROUTES.login}
+          className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline"
+        >
+          <ArrowLeft className="size-3.5" aria-hidden />
+          Nazad na prijavu
+        </Link>
+      </p>
     </div>
   )
 }
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen" />}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] items-center justify-center">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
       <ResetPasswordForm />
     </Suspense>
   )

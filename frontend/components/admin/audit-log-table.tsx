@@ -1,34 +1,85 @@
 /**
  * audit-log-table.tsx — Filterable view of admin actions.
  *
- * ROADMAP 4.7 / FRONTEND_STRUKTURA §3.6. Filters currently supported by
- * the backend-contract are `action`, `from_date`, `to_date` (see
- * types/admin.ts::AuditLogFilter). `admin_id` is not exposed as a free
- * text filter — admins search by action text + date range.
+ * KORAK 4 — refaktor sa generic `<DataTable />`. Filteri su client-state
+ * + apply button koji prosleđuje na backend (server-driven filtering).
+ *
+ * Pagination + sort su client-side preko DataTable-a; default sort = bez
+ * (audit log je već DESC po `created_at` na backend strani).
+ *
+ * Backend filteri: `action`, `from_date`, `to_date`. `admin_id` nije
+ * exposed kao free text — admins traže kombinacijom action + dates.
  */
 
 "use client"
 
 import { useState } from "react"
 import { ClipboardList, Filter } from "lucide-react"
+import type { ColumnDef } from "@tanstack/react-table"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { DataTable } from "@/components/ui/data-table"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { EmptyState } from "@/components/shared/empty-state"
 import { useAuditLog } from "@/lib/hooks/use-audit-log"
 import { formatDateTime } from "@/lib/utils/date"
 import type { AuditLogFilter } from "@/types"
+
+interface AuditLogRow {
+  id: string
+  created_at: string
+  admin_full_name: string
+  action: string
+  impersonated_user_full_name: string | null
+  ip_address: string
+}
+
+const COLUMNS: ColumnDef<AuditLogRow>[] = [
+  {
+    accessorKey: "created_at",
+    header: "Kada",
+    cell: ({ getValue }) => (
+      <span className="whitespace-nowrap text-xs text-muted-foreground">
+        {formatDateTime(getValue<string>())}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "admin_full_name",
+    header: "Admin",
+    cell: ({ getValue }) => (
+      <span className="font-medium">{getValue<string>()}</span>
+    ),
+  },
+  {
+    accessorKey: "action",
+    header: "Action",
+    cell: ({ getValue }) => (
+      <Badge variant="outline" className="font-mono text-xs">
+        {getValue<string>()}
+      </Badge>
+    ),
+  },
+  {
+    accessorKey: "impersonated_user_full_name",
+    header: "Impersonirani korisnik",
+    cell: ({ getValue }) => (
+      <span className="text-xs text-muted-foreground">
+        {getValue<string | null>() ?? "—"}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "ip_address",
+    header: "IP",
+    cell: ({ getValue }) => (
+      <span className="font-mono text-xs text-muted-foreground">
+        {getValue<string>()}
+      </span>
+    ),
+  },
+]
 
 export function AuditLogTable() {
   const [actionFilter, setActionFilter] = useState("")
@@ -54,13 +105,13 @@ export function AuditLogTable() {
     setApplied({})
   }
 
-  const rows = query.data ?? []
+  const rows = (query.data ?? []) as AuditLogRow[]
 
   return (
     <div className="space-y-4">
       <form
         onSubmit={handleApply}
-        className="grid gap-3 rounded-lg border border-border bg-background p-3 md:grid-cols-[1fr_180px_180px_auto_auto]"
+        className="grid gap-3 rounded-xl border border-border bg-card p-3 md:grid-cols-[1fr_180px_180px_auto_auto]"
       >
         <div className="grid gap-1.5">
           <Label htmlFor="audit-action">Action</Label>
@@ -107,72 +158,25 @@ export function AuditLogTable() {
         </div>
       </form>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-background">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Kada</TableHead>
-              <TableHead>Admin</TableHead>
-              <TableHead>Action</TableHead>
-              <TableHead>Impersonirani korisnik</TableHead>
-              <TableHead>IP</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {query.isLoading ? (
-              Array.from({ length: 5 }).map((_, idx) => (
-                <TableRow key={idx}>
-                  <TableCell colSpan={5}>
-                    <Skeleton className="h-6 w-full" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : query.isError ? (
-              <TableRow>
-                <TableCell colSpan={5} className="py-8">
-                  <EmptyState
-                    icon={ClipboardList}
-                    title="Audit log nije dostupan"
-                    description="Backend endpoint /admin/audit-log još nije aktivan (ROADMAP 4.7)."
-                  />
-                </TableCell>
-              </TableRow>
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="py-8">
-                  <EmptyState
-                    icon={ClipboardList}
-                    title="Nema zapisa"
-                    description="Nema audit događaja za izabrane filtere."
-                  />
-                </TableCell>
-              </TableRow>
-            ) : (
-              rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                    {formatDateTime(row.created_at)}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {row.admin_full_name}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="font-mono text-xs">
-                      {row.action}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {row.impersonated_user_full_name ?? "—"}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {row.ip_address}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable<AuditLogRow, unknown>
+        data={rows}
+        columns={COLUMNS}
+        isLoading={query.isLoading}
+        isError={query.isError}
+        ariaLabel="Audit log"
+        density="compact"
+        emptyState={{
+          icon: ClipboardList,
+          title: "Nema zapisa",
+          description: "Nema audit događaja za izabrane filtere.",
+        }}
+        errorState={{
+          icon: ClipboardList,
+          title: "Audit log nije dostupan",
+          description:
+            "Backend endpoint /admin/audit-log još nije aktivan (ROADMAP 4.7).",
+        }}
+      />
     </div>
   )
 }

@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Welcome email (admin-created user) reset-token TTL (Faza 4.3).
+    # Duži TTL od standardnog forgot-password (1h) jer admin može da kreira
+    # nalog u petak za poziv u ponedeljak — korisnik mora imati vremena.
+    WELCOME_RESET_TOKEN_TTL_DAYS: int = 7
+    # Impersonation access token TTL (Faza 4.4 / CLAUDE.md §14).
+    # Kraći je od regularnog access tokena jer se NE refresh-uje — kad istekne,
+    # admin mora ručno re-impersonirati. Krije security gap od dugotrajnog
+    # admin-as-X session-a koji se "ne primeti".
+    IMPERSONATION_TOKEN_TTL_MINUTES: int = 30
 
     # ── MinIO ──────────────────────────────────────────────────────────────────
     # MINIO_ENDPOINT is the *internal* address backend uses for server-side I/O
@@ -55,7 +64,7 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     EMAILS_FROM_EMAIL: str = "noreply@fon.bg.ac.rs"
-    EMAILS_FROM_NAME: str = "Konsultacije FON & ETF"
+    EMAILS_FROM_NAME: str = "StudentPlus"
 
     # ── Google PSE ─────────────────────────────────────────────────────────────
     GOOGLE_PSE_API_KEY: str = ""
@@ -75,6 +84,26 @@ class Settings(BaseSettings):
     # ── Celery ────────────────────────────────────────────────────────────────
     CELERY_BROKER_URL: str = "redis://redis:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://redis:6379/2"
+
+    # ── Web Push / VAPID (KORAK 1 Prompta 2 / PRD §5.3) ───────────────────────
+    # VAPID par je generisan ``scripts/generate_vapid_keys.py``-jem (DER →
+    # base64-url enkodiranje). Javni ključ se izlaže preko
+    # ``GET /api/v1/notifications/vapid-public-key`` i koristi u browseru
+    # za ``PushManager.subscribe({applicationServerKey: ...})``. Privatni
+    # ključ NIKAD ne napušta server — koristi ga ``pywebpush`` da potpiše
+    # JWT pre slanja Web Push poruke.
+    #
+    # Default vrednosti su prazni stringovi (ne crash-uje boot ako fale),
+    # ali ``push_service.send_push`` će logovati warning + skipovati slanje
+    # ako VAPID_PRIVATE_KEY nije postavljen — fallback ponašanje za
+    # razvojno okruženje pre nego što developer pokrene generate skriptu.
+    #
+    # Format ``VAPID_SUBJECT``: ``mailto:dev@example.com`` ili
+    # ``https://example.com``. Push servisi (FCM/Mozilla) traže ovo polje
+    # kao kontakt informaciju za slučaj abuse-a.
+    VAPID_PUBLIC_KEY: str = ""
+    VAPID_PRIVATE_KEY: str = ""
+    VAPID_SUBJECT: str = "mailto:dev@studentska-platforma.local"
 
     @field_validator("ALLOWED_STUDENT_DOMAINS", "ALLOWED_STAFF_DOMAINS", mode="before")
     @classmethod

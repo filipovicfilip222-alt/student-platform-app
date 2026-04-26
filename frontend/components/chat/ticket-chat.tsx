@@ -1,41 +1,52 @@
 /**
- * ticket-chat.tsx — Per-appointment mini-chat with 20-message cap.
+ * ticket-chat.tsx — Per-appointment mini-chat sa 20-msg cap-om.
  *
- * ROADMAP 3.6 / Faza 3.6.
+ * KORAK 6 (StudentPlus polish):
+ *   - Header: naslov + counter + optional 24h countdown badge.
+ *   - Lista poruka: smooth scroll na novu poruku (osim prvog load-a),
+ *     "Učitavam…" bubble-skeleton-i koji liče na prave bubble redove.
+ *   - Empty state: friendly poruka + ikona.
+ *   - Footer: ChatClosedNotice (ako zatvoren) + ChatInput sa hintom.
  *
- * Polling fallback strategy (WebSocket arrives with ROADMAP 4.1):
- *   - Poll `/appointments/{id}/messages` every 5 s while the tab is
- *     active and the chat is not closed.
- *   - `refetchOnWindowFocus: true` handles tab-switch staleness.
- *
- * Closed chat conditions:
+ * Closed conditions (lokalno — WS reason je informativan):
  *   - appointmentStatus ∈ {REJECTED, CANCELLED, COMPLETED} → "status"
  *   - messages.length ≥ MAX_MESSAGES → "limit"
  */
 
 "use client"
 
-import { useEffect, useRef } from "react"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useEffect, useRef, useState } from "react"
+import { Hourglass, MessageCircle } from "lucide-react"
+import { formatDistanceToNowStrict, isAfter } from "date-fns"
+import { sr } from "date-fns/locale"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { ChatClosedNotice } from "./chat-closed-notice"
 import { ChatInput } from "./chat-input"
 import { ChatMessage } from "./chat-message"
 import { ChatMessageCounter } from "./chat-message-counter"
-import { appointmentsApi } from "@/lib/api/appointments"
+import { useChatMessages, useSendMessage } from "@/lib/hooks/use-chat"
 import { useAuthStore } from "@/lib/stores/auth"
+import { cn } from "@/lib/utils"
 import { toastApiError } from "@/lib/utils/errors"
 import type { AppointmentStatus, ChatMessageResponse, Uuid } from "@/types"
 
 const MAX_MESSAGES = 20
-const POLL_INTERVAL_MS = 5_000
 
 export interface TicketChatProps {
   appointmentId: Uuid
   appointmentStatus: AppointmentStatus
   participantNames?: Record<Uuid, string>
+  /**
+   * ISO timestamp kada chat treba da se zatvori (24h posle termina, npr.).
+   * Ako se ne prosledi, countdown se ne prikazuje.
+   */
+  chatClosesAt?: string | null
 }
 
 const TERMINAL_STATUSES: AppointmentStatus[] = [
@@ -44,53 +55,69 @@ const TERMINAL_STATUSES: AppointmentStatus[] = [
   "COMPLETED",
 ]
 
+/**
+ * Live countdown koji se osvežava svake minute. Vraća { label, isCritical }
+ * gde `isCritical` označava preostalo manje od 1 sata (postaje crveno).
+ */
+function useChatCountdown(closesAt?: string | null) {
+  const [, tick] = useState(0)
+  useEffect(() => {
+    if (!closesAt) return
+    const interval = setInterval(() => tick((n) => n + 1), 60_000)
+    return () => clearInterval(interval)
+  }, [closesAt])
+
+  if (!closesAt) return null
+  const target = new Date(closesAt)
+  if (Number.isNaN(target.getTime())) return null
+  const now = new Date()
+  if (!isAfter(target, now)) return null
+
+  const diffMs = target.getTime() - now.getTime()
+  const isCritical = diffMs < 60 * 60 * 1000
+  return {
+    label: formatDistanceToNowStrict(target, { locale: sr, addSuffix: false }),
+    isCritical,
+  }
+}
+
 export function TicketChat({
   appointmentId,
   appointmentStatus,
   participantNames = {},
+  chatClosesAt = null,
 }: TicketChatProps) {
   const currentUserId = useAuthStore((s) => s.user?.id ?? null)
-  const qc = useQueryClient()
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const hasScrolledRef = useRef(false)
 
   const isStatusClosed = TERMINAL_STATUSES.includes(appointmentStatus)
-
-  const messagesQuery = useQuery({
-    queryKey: ["appointment", appointmentId, "messages"] as const,
-    queryFn: () => appointmentsApi.listMessages(appointmentId),
-    refetchInterval: isStatusClosed ? false : POLL_INTERVAL_MS,
-    refetchOnWindowFocus: true,
-  })
-
+  const messagesQuery = useChatMessages(appointmentId, appointmentStatus)
   const messages: ChatMessageResponse[] = messagesQuery.data ?? []
   const isLimitReached = messages.length >= MAX_MESSAGES
   const isClosed = isStatusClosed || isLimitReached
 
-  const sendMutation = useMutation({
-    mutationFn: (content: string) =>
-      appointmentsApi.sendMessage(appointmentId, { content }),
-    onSuccess: (newMessage) => {
-      qc.setQueryData<ChatMessageResponse[]>(
-        ["appointment", appointmentId, "messages"],
-        (prev) => {
-          if (!prev) return [newMessage]
-          if (prev.some((m) => m.id === newMessage.id)) return prev
-          return [...prev, newMessage]
-        }
-      )
-      qc.invalidateQueries({ queryKey: ["appointment", appointmentId] })
-    },
-    onError: (err) => toastApiError(err, "Greška pri slanju poruke."),
-  })
+  const sendMutation = useSendMessage(appointmentId)
+  const countdown = useChatCountdown(chatClosesAt)
 
+  // Smooth-scroll na novu poruku; prvi load skroluj instantno (bez animacije).
   useEffect(() => {
     const node = scrollRef.current
-    if (node) node.scrollTop = node.scrollHeight
+    if (!node) return
+    if (!hasScrolledRef.current) {
+      node.scrollTop = node.scrollHeight
+      hasScrolledRef.current = true
+    } else {
+      node.scrollTo({ top: node.scrollHeight, behavior: "smooth" })
+    }
   }, [messages.length])
 
   function handleSend(content: string) {
     if (isClosed) return
-    sendMutation.mutate(content)
+    sendMutation.mutate(
+      { content },
+      { onError: (err) => toastApiError(err, "Greška pri slanju poruke.") }
+    )
   }
 
   const closedReason: "status" | "limit" | null = isStatusClosed
@@ -100,33 +127,49 @@ export function TicketChat({
       : null
 
   return (
-    <Card className="flex h-[520px] flex-col">
-      <CardHeader className="flex flex-row items-center justify-between border-b p-4">
-        <CardTitle className="text-base font-semibold">Chat</CardTitle>
-        <ChatMessageCounter current={messages.length} max={MAX_MESSAGES} />
+    <Card className="flex h-[560px] flex-col overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 border-b border-border bg-muted/30 p-3">
+        <CardTitle className="flex items-center gap-2 text-base font-semibold">
+          <MessageCircle className="size-4 text-primary" aria-hidden />
+          Razgovor
+        </CardTitle>
+        <div className="flex items-center gap-2">
+          {countdown && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums",
+                countdown.isCritical
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-muted text-muted-foreground"
+              )}
+              aria-label={`Chat se zatvara za ${countdown.label}`}
+            >
+              <Hourglass className="size-3" aria-hidden />
+              {countdown.label}
+            </span>
+          )}
+          <ChatMessageCounter current={messages.length} max={MAX_MESSAGES} />
+        </div>
       </CardHeader>
 
       <CardContent className="flex min-h-0 flex-1 flex-col gap-3 p-0">
         <div
           ref={scrollRef}
-          className="min-h-0 flex-1 overflow-y-auto px-4 py-3"
+          className="min-h-0 flex-1 overflow-y-auto px-4 py-4 [scroll-behavior:smooth]"
+          role="log"
+          aria-live="polite"
+          aria-label="Istorija poruka"
         >
           {messagesQuery.isLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-10 w-2/3 rounded-xl" />
-              <Skeleton className="h-10 w-1/2 rounded-xl" />
-              <Skeleton className="h-10 w-3/4 rounded-xl" />
-            </div>
+            <BubbleSkeletons />
           ) : messagesQuery.isError ? (
-            <p className="text-center text-xs text-muted-foreground">
-              Chat stream trenutno nedostupan (očekuje se backend ROADMAP 3.6).
-            </p>
+            <div className="flex h-full items-center justify-center text-center text-xs text-muted-foreground">
+              Razgovor trenutno nije dostupan. Pokušajte za par sekundi.
+            </div>
           ) : messages.length === 0 ? (
-            <p className="text-center text-xs text-muted-foreground">
-              Još uvek nema poruka. Započnite razgovor.
-            </p>
+            <EmptyChat />
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-3">
               {messages.map((m) => (
                 <ChatMessage
                   key={m.id}
@@ -143,18 +186,76 @@ export function TicketChat({
           )}
         </div>
 
-        <div className="border-t p-3 space-y-2">
+        <div className="space-y-2 border-t border-border bg-muted/20 p-3">
           {closedReason && <ChatClosedNotice reason={closedReason} />}
           <ChatInput
             onSend={handleSend}
             isSending={sendMutation.isPending}
             disabled={isClosed}
-            placeholder={
-              isClosed ? "Chat je zatvoren" : "Napišite poruku..."
-            }
+            placeholder={isClosed ? "Chat je zatvoren" : "Napišite poruku…"}
           />
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+/* ── Helpers ────────────────────────────────────────────────────────────── */
+
+function BubbleSkeletons() {
+  return (
+    <ul className="space-y-3">
+      <SkeletonBubble side="left" width="w-[55%]" />
+      <SkeletonBubble side="right" width="w-[40%]" />
+      <SkeletonBubble side="left" width="w-[70%]" />
+    </ul>
+  )
+}
+
+function SkeletonBubble({
+  side,
+  width,
+}: {
+  side: "left" | "right"
+  width: string
+}) {
+  return (
+    <li
+      className={cn(
+        "flex gap-2",
+        side === "right" ? "flex-row-reverse" : "flex-row"
+      )}
+    >
+      {side === "left" && (
+        <div className="size-7 shrink-0 animate-pulse rounded-full bg-muted" />
+      )}
+      <div
+        className={cn(
+          "h-9 animate-pulse rounded-2xl bg-muted",
+          width,
+          side === "right" ? "rounded-tr-sm" : "rounded-tl-sm"
+        )}
+      />
+    </li>
+  )
+}
+
+function EmptyChat() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+      <div
+        aria-hidden
+        className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"
+      >
+        <MessageCircle className="size-5" />
+      </div>
+      <p className="text-sm font-medium text-foreground">
+        Razgovor još nije počeo
+      </p>
+      <p className="text-xs text-muted-foreground">
+        Napišite poruku ispod — limit je 20 poruka, podržan je *bold*, _italic_
+        i `code`.
+      </p>
+    </div>
   )
 }

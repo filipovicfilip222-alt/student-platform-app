@@ -59,6 +59,12 @@ export interface RequestRejectDialogProps {
   appointment: AppointmentResponse | null
   onConfirm: (reason: string) => void
   isPending: boolean
+  /** Optional copy overrides — used when this dialog is reused for the
+   *  "professor cancels approved appointment" flow on /appointments/[id]. */
+  title?: string
+  description?: string
+  confirmLabel?: string
+  reasonLabel?: string
 }
 
 const NO_CANNED = "__none__"
@@ -69,6 +75,10 @@ export function RequestRejectDialog({
   appointment,
   onConfirm,
   isPending,
+  title = "Odbij zahtev",
+  description,
+  confirmLabel = "Odbij termin",
+  reasonLabel = "Razlog odbijanja",
 }: RequestRejectDialogProps) {
   const cannedQuery = useCannedResponses()
   const [selectedCanned, setSelectedCanned] = useState<string>(NO_CANNED)
@@ -102,13 +112,27 @@ export function RequestRejectDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Odbij zahtev</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Termin zakazan za{" "}
-            <strong className="font-semibold text-foreground">
-              {formatDateTime(appointment.slot_datetime)}
-            </strong>
-            . Student dobija email sa vašim obrazloženjem.
+            {description ? (
+              <>
+                {description}{" "}
+                <span className="block pt-1 text-xs">
+                  Termin:{" "}
+                  <strong className="font-semibold text-foreground">
+                    {formatDateTime(appointment.slot_datetime)}
+                  </strong>
+                </span>
+              </>
+            ) : (
+              <>
+                Termin zakazan za{" "}
+                <strong className="font-semibold text-foreground">
+                  {formatDateTime(appointment.slot_datetime)}
+                </strong>
+                . Student dobija email sa vašim obrazloženjem.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -158,7 +182,7 @@ export function RequestRejectDialog({
               name="reason"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Razlog odbijanja</FormLabel>
+                  <FormLabel>{reasonLabel}</FormLabel>
                   <FormControl>
                     <Textarea
                       rows={5}
@@ -183,7 +207,7 @@ export function RequestRejectDialog({
               </Button>
               <Button type="submit" variant="destructive" disabled={isPending}>
                 {isPending && <Loader2 className="animate-spin" aria-hidden />}
-                Odbij termin
+                {confirmLabel}
               </Button>
             </DialogFooter>
           </form>

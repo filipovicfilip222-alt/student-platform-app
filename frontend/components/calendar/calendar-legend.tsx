@@ -1,29 +1,81 @@
 /**
  * calendar-legend.tsx — Color legend for BookingCalendar / AvailabilityCalendar.
  *
- * ROADMAP 3.5 / Faza 3.5. Shared between student and professor views.
- * Colors must match the event backgrounds set in booking-calendar.tsx
- * and availability-calendar.tsx.
+ * KORAK 5 — usklađeno sa StudentPlus paletom (burgundy primary + amber
+ * accent). Svatch klase replikuju izgled `.fc-event--*` modifikatora iz
+ * globals.css, tako da legend tačno odražava prave kalendar boje.
+ *
+ * Komponenta prima `mode="student" | "professor"` da prikaže relevantne
+ * varijante:
+ *   - student vidi: Slobodno / Moj termin / Zauzeto / Prošao
+ *   - profesor vidi: Slobodno / Rekurentno / Rezervisan / Blackout
  */
 
 import { cn } from "@/lib/utils"
 
-const ITEMS: Array<{
+interface LegendItem {
   key: string
   label: string
   swatchClass: string
-}> = [
-  { key: "available", label: "Slobodno", swatchClass: "bg-emerald-500" },
-  { key: "full", label: "Popunjeno", swatchClass: "bg-amber-500" },
-  { key: "mine", label: "Moj termin", swatchClass: "bg-sky-500" },
-  { key: "blocked", label: "Blackout", swatchClass: "bg-muted-foreground/50" },
+}
+
+const STUDENT_ITEMS: LegendItem[] = [
+  {
+    key: "available",
+    label: "Slobodno",
+    swatchClass: "border-2 border-primary/55 bg-primary/10",
+  },
+  {
+    key: "mine",
+    label: "Moj termin",
+    swatchClass: "bg-primary",
+  },
+  {
+    key: "reserved",
+    label: "Zauzeto",
+    swatchClass: "border border-accent bg-accent/25",
+  },
+  {
+    key: "past",
+    label: "Prošao",
+    swatchClass: "bg-muted opacity-50",
+  },
+]
+
+const PROFESSOR_ITEMS: LegendItem[] = [
+  {
+    key: "available",
+    label: "Slobodan",
+    swatchClass: "border-2 border-primary/55 bg-primary/10",
+  },
+  {
+    key: "recurring",
+    label: "Rekurentan",
+    swatchClass: "border-2 border-dashed border-accent bg-accent/20",
+  },
+  {
+    key: "reserved",
+    label: "Rezervisan",
+    swatchClass: "border border-accent bg-accent/25",
+  },
+  {
+    key: "blocked",
+    label: "Blackout",
+    swatchClass: "bg-muted",
+  },
 ]
 
 export interface CalendarLegendProps {
   className?: string
+  mode?: "student" | "professor"
 }
 
-export function CalendarLegend({ className }: CalendarLegendProps) {
+export function CalendarLegend({
+  className,
+  mode = "student",
+}: CalendarLegendProps) {
+  const items = mode === "professor" ? PROFESSOR_ITEMS : STUDENT_ITEMS
+
   return (
     <div
       className={cn(
@@ -32,10 +84,10 @@ export function CalendarLegend({ className }: CalendarLegendProps) {
       )}
       aria-label="Legenda kalendara"
     >
-      {ITEMS.map((item) => (
+      {items.map((item) => (
         <span key={item.key} className="inline-flex items-center gap-1.5">
           <span
-            className={cn("size-2.5 rounded-full", item.swatchClass)}
+            className={cn("size-3 rounded-sm", item.swatchClass)}
             aria-hidden
           />
           {item.label}

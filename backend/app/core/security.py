@@ -29,11 +29,28 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 # ── JWT helpers ────────────────────────────────────────────────────────────────
 
-def create_access_token(data: dict[str, Any]) -> str:
+def create_access_token(
+    data: dict[str, Any],
+    expires_minutes: int | None = None,
+) -> str:
+    """
+    Create a signed access JWT.
+
+    ``data`` may carry arbitrary custom claims (npr. ``imp``, ``imp_email``,
+    ``imp_name`` za impersonation tokene — Faza 4.4) — sva proslijeđena polja
+    završavaju u payload-u i čitaju se kroz :func:`decode_access_token`.
+
+    ``expires_minutes`` opciono override-uje default ``ACCESS_TOKEN_EXPIRE_MINUTES``.
+    Impersonation tokeni koriste :data:`settings.IMPERSONATION_TOKEN_TTL_MINUTES`
+    (30 min) jer ne idu kroz refresh rotaciju (CLAUDE.md §14).
+    """
     payload = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    minutes = (
+        expires_minutes
+        if expires_minutes is not None
+        else settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
+    expire = datetime.now(timezone.utc) + timedelta(minutes=minutes)
     payload.update({"exp": expire, "type": "access"})
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 

@@ -46,7 +46,7 @@ export function AdminRequestRow({
   isBusy,
 }: Props) {
   return (
-    <li className="rounded-lg border border-border bg-background p-3 transition hover:bg-muted/30">
+    <li className="rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/30 hover:bg-muted/30">
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex size-8 items-center justify-center rounded-md bg-muted text-muted-foreground">
           <FileText className="size-4" aria-hidden />

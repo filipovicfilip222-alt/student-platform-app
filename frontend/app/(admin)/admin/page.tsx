@@ -1,11 +1,16 @@
 ﻿/**
  * (admin)/admin/page.tsx — ADMIN dashboard landing.
  *
- * ROADMAP 4.7 — platform overview. Displays headline metrics at the top
- * (AdminDashboardMetrics — reads /admin/overview, degrades gracefully
- * when the endpoint is not yet live) plus quick-link tiles into the
- * subsections that actually exist in the current admin shell.
+ * KORAK 3 polish:
+ *   - GreetingHeader (vremenski-zavisan)
+ *   - AdminDashboardMetrics (postojeća komponenta — header chrome se ne dira)
+ *   - 2-col grid: Brzi pristup (5 sekcija) + Recent notifications
+ *
+ * AdminDashboardMetrics već gracefulno hendluje 404 na `/admin/overview`
+ * dok ROADMAP 4.7 ne zatvori taj endpoint.
  */
+
+"use client"
 
 import Link from "next/link"
 import {
@@ -17,8 +22,10 @@ import {
 } from "lucide-react"
 
 import { AdminDashboardMetrics } from "@/components/admin/admin-dashboard-metrics"
-import { PageHeader } from "@/components/shared/page-header"
+import { GreetingHeader } from "@/components/dashboard/greeting-header"
+import { RecentNotificationsCard } from "@/components/dashboard/recent-notifications-card"
 import { ROUTES } from "@/lib/constants/routes"
+import { useAuthStore } from "@/lib/stores/auth"
 
 const QUICK_LINKS = [
   {
@@ -54,43 +61,50 @@ const QUICK_LINKS = [
 ] as const
 
 export default function AdminDashboardPage() {
+  const user = useAuthStore((s) => s.user)
+
   return (
-    <div className="space-y-6 p-6">
-      <PageHeader
-        title="Admin dashboard"
-        description="Platformski overview — ključne metrike i brzi pristup."
+    <div className="space-y-8 p-6">
+      <GreetingHeader
+        firstName={user?.first_name}
+        fallbackName="administratore"
+        subtitle="Platformski overview — ključne metrike i brzi pristup."
       />
 
       <AdminDashboardMetrics />
 
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Brzi pristup
-        </h2>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {QUICK_LINKS.map((item) => {
-            const Icon = item.icon
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="group flex items-start gap-3 rounded-lg border border-border bg-background p-4 transition hover:border-primary/60 hover:bg-muted/40"
-              >
-                <div className="mt-0.5 flex size-9 items-center justify-center rounded-md bg-primary/10 text-primary">
-                  <Icon className="size-5" aria-hidden />
-                </div>
-                <div>
-                  <div className="font-semibold group-hover:text-primary">
-                    {item.title}
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="space-y-3 lg:col-span-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Brzi pristup
+          </h2>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {QUICK_LINKS.map((item) => {
+              const Icon = item.icon
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="group flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[0_4px_16px_-4px_hsl(var(--primary)/0.18)]"
+                >
+                  <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-transform group-hover:scale-110">
+                    <Icon className="size-5" aria-hidden />
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {item.description}
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-semibold group-hover:text-primary">
+                      {item.title}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {item.description}
+                    </div>
                   </div>
-                </div>
-              </Link>
-            )
-          })}
+                </Link>
+              )
+            })}
+          </div>
         </div>
+
+        <RecentNotificationsCard limit={4} className="lg:col-span-1" />
       </section>
     </div>
   )
