@@ -85,6 +85,7 @@ def _get_internal_client() -> Minio:
             access_key=settings.MINIO_ACCESS_KEY,
             secret_key=settings.MINIO_SECRET_KEY,
             secure=settings.MINIO_SECURE,
+            region=settings.MINIO_REGION,
         )
     return _internal_client
 
@@ -97,6 +98,7 @@ def _get_public_client() -> Minio:
             access_key=settings.MINIO_ACCESS_KEY,
             secret_key=settings.MINIO_SECRET_KEY,
             secure=settings.MINIO_SECURE,
+            region=settings.MINIO_REGION,
         )
     return _public_client
 

@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     MINIO_PUBLIC_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
+    # Setting region avoids a synchronous ``GetBucketLocation`` round-trip the
+    # SDK otherwise performs before signing presigned URLs. The public client
+    # cannot reach localhost:9000 from inside the backend container, so without
+    # this the presign call fails with a 500.
+    MINIO_REGION: str = "us-east-1"
     MINIO_BUCKET_APPOINTMENTS: str = "appointment-files"
     MINIO_BUCKET_AVATARS: str = "professor-avatars"
     MINIO_BUCKET_IMPORTS: str = "bulk-imports"
