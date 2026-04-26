@@ -30,7 +30,12 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # ── MinIO ──────────────────────────────────────────────────────────────────
+    # MINIO_ENDPOINT is the *internal* address backend uses for server-side I/O
+    # (put/get/delete) — Docker DNS name resolves only inside the compose net.
+    # MINIO_PUBLIC_ENDPOINT is what the browser / external curl will see in the
+    # presigned URL host. Keep both so presigning + S3 ops use the right host.
     MINIO_ENDPOINT: str = "minio:9000"
+    MINIO_PUBLIC_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_BUCKET_APPOINTMENTS: str = "appointment-files"

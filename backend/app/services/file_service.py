@@ -58,22 +58,47 @@ _FILENAME_SANITIZE_RE = re.compile(r"[^A-Za-z0-9._\-]")
 _MAX_FILENAME_LEN = 200
 
 
-# ── MinIO client (lazy singleton) ─────────────────────────────────────────────
+# ── MinIO clients (two lazy singletons) ───────────────────────────────────────
+#
+# We keep two clients with identical credentials but different endpoints:
+#   * internal — used for server-to-server I/O (put/get/delete) through the
+#     Docker network. Endpoint resolves only inside compose (e.g. "minio:9000").
+#   * public  — used purely to render presigned URLs that browsers / external
+#     clients can hit. Endpoint must be reachable from outside (e.g.
+#     "localhost:9000" in dev, "files.example.com" in prod).
+#
+# Presigned URL signing is a local computation; the SDK never actually contacts
+# the server during ``presigned_get_object``. The signature stays valid against
+# the same bucket regardless of which client minted it, as long as the
+# access/secret key pair matches.
 
 
-_minio_client: Minio | None = None
+_internal_client: Minio | None = None
+_public_client: Minio | None = None
 
 
-def _get_client() -> Minio:
-    global _minio_client
-    if _minio_client is None:
-        _minio_client = Minio(
+def _get_internal_client() -> Minio:
+    global _internal_client
+    if _internal_client is None:
+        _internal_client = Minio(
             endpoint=settings.MINIO_ENDPOINT,
             access_key=settings.MINIO_ACCESS_KEY,
             secret_key=settings.MINIO_SECRET_KEY,
             secure=settings.MINIO_SECURE,
         )
-    return _minio_client
+    return _internal_client
+
+
+def _get_public_client() -> Minio:
+    global _public_client
+    if _public_client is None:
+        _public_client = Minio(
+            endpoint=settings.MINIO_PUBLIC_ENDPOINT,
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            secure=settings.MINIO_SECURE,
+        )
+    return _public_client
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -140,7 +165,7 @@ async def upload_appointment_file(
     """
     object_key = _build_object_key(appointment_id, file_uuid, filename)
     bucket = settings.MINIO_BUCKET_APPOINTMENTS
-    client = _get_client()
+    client = _get_internal_client()
 
     def _put() -> None:
         client.put_object(
@@ -163,9 +188,13 @@ async def upload_appointment_file(
 
 
 async def presigned_get_url(object_key: str, ttl_seconds: int = 3600) -> str:
-    """Return a presigned GET URL for an existing object (default TTL 1h)."""
+    """Return a presigned GET URL for an existing object (default TTL 1h).
+
+    Uses the *public* MinIO client so the URL host is reachable from outside
+    the Docker network (browsers, host curl).
+    """
     bucket = settings.MINIO_BUCKET_APPOINTMENTS
-    client = _get_client()
+    client = _get_public_client()
 
     def _sign() -> str:
         return client.presigned_get_object(
@@ -186,7 +215,7 @@ async def presigned_get_url(object_key: str, ttl_seconds: int = 3600) -> str:
 async def delete_object(object_key: str) -> None:
     """Remove an object from the appointment-files bucket. Idempotent."""
     bucket = settings.MINIO_BUCKET_APPOINTMENTS
-    client = _get_client()
+    client = _get_internal_client()
 
     def _remove() -> None:
         client.remove_object(bucket_name=bucket, object_name=object_key)
