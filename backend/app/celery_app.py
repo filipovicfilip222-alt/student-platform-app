@@ -28,10 +28,32 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     broker_connection_retry_on_startup=True,
     beat_schedule={
-        "detect-no-show-every-30-minutes": {
-            "task": "strike_tasks.detect_no_show",
-            "schedule": crontab(minute="*/30"),
-        },
+        # ──────────────────────────────────────────────────────────────
+        # Auto-NO_SHOW detekcija je PRIVREMENO ISKLJUČENA.
+        #
+        # Razlog: trenutna implementacija (`strike_tasks.detect_no_show`)
+        # automatski postavlja `appointment.status = NO_SHOW` (i dodeljuje
+        # 2 strike poena) za svaki APPROVED termin čiji je kraj prošao
+        # > 30 min, BEZ flow-a u kome profesor potvrđuje da li je student
+        # došao. Posledica: svaki termin koji profesor zaboravi da
+        # markira kao COMPLETED automatski kažnjava studenta — false
+        # positive masakr.
+        #
+        # Dodatno, do migracije 0006 PG enum `appointmentstatus` nije
+        # imao `NO_SHOW` vrednost, pa je `add_strike` flush + Celery
+        # `send_strike_added.delay()` punio notifikacije ali bi commit
+        # padao na enum violation → strike rollback, notifikacija već
+        # u Redisu — student dobija fantomske strike notifikacije bez
+        # ijednog reda u `strike_records`.
+        #
+        # Ponovo uključiti TEK kada postoji „professor confirms attendance"
+        # akcija (PRD §5.3): COMPLETED ili NO_SHOW manuelno; auto-task
+        # ostaje samo kao safety net posle X dana profesorove neaktivnosti.
+        # ──────────────────────────────────────────────────────────────
+        # "detect-no-show-every-30-minutes": {
+        #     "task": "strike_tasks.detect_no_show",
+        #     "schedule": crontab(minute="*/30"),
+        # },
         "process-waitlist-offers-every-5-minutes": {
             "task": "waitlist_tasks.process_waitlist_offers",
             "schedule": crontab(minute="*/5"),

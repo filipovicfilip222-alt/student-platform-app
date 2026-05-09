@@ -35,6 +35,7 @@ import { Clock } from "lucide-react"
 import { CalendarLegend } from "@/components/calendar/calendar-legend"
 import { CalendarSkeleton } from "@/components/calendar/calendar-skeleton"
 import { SlotPopover } from "@/components/calendar/slot-popover"
+import { srLatnLocale } from "@/lib/utils/fullcalendar-locale"
 import {
   HoverCard,
   HoverCardContent,
@@ -181,7 +182,7 @@ export function BookingCalendar({
                 : "timeGridWeek,dayGridMonth,timeGridDay",
             }}
             firstDay={1}
-            locale="sr"
+            locale={srLatnLocale}
             allDaySlot={false}
             slotMinTime="07:00:00"
             slotMaxTime="22:00:00"

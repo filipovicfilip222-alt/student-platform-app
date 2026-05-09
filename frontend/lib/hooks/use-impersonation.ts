@@ -66,6 +66,9 @@ export function useStartImpersonation() {
           is_verified: true,
           profile_image_url: null,
           created_at: new Date().toISOString(),
+          // Strike polja su STUDENT-only; admin uvek ima 0/null.
+          total_strike_points: 0,
+          blocked_until: null,
         }
 
       setImpersonating({

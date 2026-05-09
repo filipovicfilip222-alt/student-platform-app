@@ -10,6 +10,7 @@ import { professorsApi } from "@/lib/api/professors"
 import type {
   BlackoutCreateRequest,
   SlotCreateRequest,
+  SlotDeleteRequest,
   SlotUpdateRequest,
   Uuid,
 } from "@/types"
@@ -42,11 +43,27 @@ export function useUpdateSlot() {
   })
 }
 
+/**
+ * Otkazivanje slota — opcioni `cancellation_message` se šalje studentima
+ * koji su zakazali termin u tom slotu (kao razlog otkazivanja u notif/email).
+ * Mutation uvek invalidira slots query; `appointments`/`requests` query
+ * ključevi se takođe invalidiraju jer su pogođeni termini sad u CANCELLED.
+ */
 export function useDeleteSlot() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: Uuid) => professorsApi.deleteSlot(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: SLOTS_KEY }),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: Uuid
+      data?: SlotDeleteRequest
+    }) => professorsApi.deleteSlot(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: SLOTS_KEY })
+      qc.invalidateQueries({ queryKey: ["professor", "requests"] })
+      qc.invalidateQueries({ queryKey: ["professor", "appointments"] })
+    },
   })
 }
 

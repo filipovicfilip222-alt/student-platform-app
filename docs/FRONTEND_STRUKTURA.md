@@ -51,7 +51,7 @@ frontend/
 │   │   ├── layout.tsx                      # client component, čita rolu iz Zustand-a
 │   │   │                                   # i prosleđuje je <AppShell role="..."> dinamički
 │   │   └── appointments/[id]/page.tsx      # detalj + chat + fajlovi + (uslovni) Otkaži flow
-│   │                                       # student → AppointmentCancelDialog (strike < 12h)
+│   │                                       # student → AppointmentCancelDialog (strike < 24h)
 │   │                                       # profesor/asistent → reuse RequestRejectDialog (razlog)
 │   │
 │   ├── (professor)/                        # role PROFESOR + ASISTENT
@@ -313,7 +313,7 @@ Next.js 14 App Router route groupe `(auth)`, `(student)`, `(appointment)`, `(pro
 
 **Appointment detail** (`/appointments/[id]`) je shared stranica koja prikazuje status, fajlove, chat, učesnike (grupne konsultacije). Tri različita auditorijuma — student koji je rezervisao slot, profesor čiji je slot, asistent kome je delegiran zahtev — koriste **istu** komponentu jer im je view 95% isti; razlikuje se samo Otkaži flow (vidi § 8.3 i § 8.6):
 
-- **Student** → `AppointmentCancelDialog` (potvrda bez razloga, bekend dodaje strike ako je < 12h do termina).
+- **Student** → `AppointmentCancelDialog` (potvrda bez razloga, bekend dodaje strike ako je < 24h do termina).
 - **Profesor / asistent** → `RequestRejectDialog` reuse-ovan sa custom title/description (obavezan razlog koji se snima u `rejection_reason` i šalje studentu kroz `send_appointment_rejected` Celery task).
 
 URL-ovi se ne preklapaju (route grupe su tu samo za layout) — `(appointment)/appointments/[id]` rezerviše URL `/appointments/[id]`, pa **ne sme** istovremeno postojati `(student)/appointments/[id]/page.tsx` (kompajler bi izbacio "duplicate route" grešku).

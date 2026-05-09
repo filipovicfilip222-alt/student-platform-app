@@ -24,6 +24,12 @@ interface AuthState {
   setAuth: (user: UserResponse, accessToken: string) => void
   /** Update only the access token (used by the Axios refresh interceptor). */
   setAccessToken: (accessToken: string) => void
+  /**
+   * Update only the user record (npr. nakon STRIKE_ADDED WS događaja —
+   * `total_strike_points` se promenio pa dashboard treba osvežen badge).
+   * Access token ostaje netaknut.
+   */
+  setUser: (user: UserResponse) => void
   /** Clear all auth state after logout or failed refresh. */
   clearAuth: () => void
   setLoading: (loading: boolean) => void
@@ -39,6 +45,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   setAccessToken: (accessToken) =>
     set({ accessToken }),
+
+  setUser: (user) => set({ user }),
 
   clearAuth: () =>
     set({ user: null, accessToken: null, isLoading: false }),

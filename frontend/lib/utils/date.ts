@@ -3,10 +3,14 @@
  *
  * Thin wrappers over `date-fns` with the Serbian Latin locale preloaded.
  * Accepts both `Date` instances and ISO strings returned by the API.
+ *
+ * NOTE: We use `srLatn` (Serbian Latin) instead of `sr` (which is Cyrillic
+ * in date-fns). The whole product UI is in Latin script so month/weekday
+ * names must follow.
  */
 
 import { format, formatDistanceToNow, parseISO } from "date-fns"
-import { sr } from "date-fns/locale"
+import { srLatn } from "date-fns/locale"
 
 type DateInput = Date | string
 
@@ -16,20 +20,20 @@ function toDate(value: DateInput): Date {
 
 /** Example: 24.04.2026. 14:30 */
 export function formatDateTime(value: DateInput): string {
-  return format(toDate(value), "dd.MM.yyyy. HH:mm", { locale: sr })
+  return format(toDate(value), "dd.MM.yyyy. HH:mm", { locale: srLatn })
 }
 
 /** Example: 24.04.2026. */
 export function formatDate(value: DateInput): string {
-  return format(toDate(value), "dd.MM.yyyy.", { locale: sr })
+  return format(toDate(value), "dd.MM.yyyy.", { locale: srLatn })
 }
 
 /** Example: pre 3 sata, za 2 dana */
 export function formatRelative(value: DateInput): string {
-  return formatDistanceToNow(toDate(value), { addSuffix: true, locale: sr })
+  return formatDistanceToNow(toDate(value), { addSuffix: true, locale: srLatn })
 }
 
 /** Example: 14:30 */
 export function formatTime(value: DateInput): string {
-  return format(toDate(value), "HH:mm", { locale: sr })
+  return format(toDate(value), "HH:mm", { locale: srLatn })
 }

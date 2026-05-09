@@ -3,8 +3,11 @@
  *
  * ROADMAP 2.2 — shared shell primitives.
  *
- * - "Profil" link is disabled for now (ROADMAP 3.4 — profile page arrives
- *   with the student dashboard milestone).
+ * - "Profil" deep-links to the role-appropriate settings page with the
+ *   "Profil" tab pre-selected (e.g. /professor/settings?tab=profile).
+ *   For roles that do not yet have a self-service settings page (STUDENT,
+ *   ASISTENT, ADMIN in V1) the entry stays disabled — we deliberately do
+ *   NOT route them to a 403/404 just to keep the visual affordance.
  * - "Odjavi se" calls the existing `useLogout` mutation which:
  *     1. POSTs /auth/logout to revoke the Redis refresh entry and clear
  *        the httpOnly cookie (see backend/app/api/v1/auth.py).
@@ -36,7 +39,25 @@ import { ROUTES } from "@/lib/constants/routes"
 import { useLogout } from "@/lib/hooks/use-auth"
 import { useAuthStore } from "@/lib/stores/auth"
 import { toastApiError } from "@/lib/utils/errors"
-import type { UserResponse } from "@/types/auth"
+import type { UserResponse, UserRole } from "@/types/auth"
+
+/**
+ * Maps a user role to the route that should open with the "Profil" tab
+ * focused. Returning `null` means the role does not yet have a self-service
+ * settings page in V1 — we keep the menu entry visible-but-disabled rather
+ * than routing the user into a dead-end (404/403).
+ */
+function profileRouteForRole(role: UserRole): string | null {
+  switch (role) {
+    case "PROFESOR":
+      return `${ROUTES.professorSettings}?tab=profile`
+    case "STUDENT":
+    case "ASISTENT":
+    case "ADMIN":
+    default:
+      return null
+  }
+}
 
 function initialsOf(user: UserResponse | null): string {
   if (!user) return "?"
@@ -66,6 +87,7 @@ export function UserMenu() {
   if (!user) return null
 
   const fullName = `${user.first_name} ${user.last_name}`.trim()
+  const profileHref = profileRouteForRole(user.role)
 
   return (
     <DropdownMenu>
@@ -102,7 +124,14 @@ export function UserMenu() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem disabled>
+        <DropdownMenuItem
+          disabled={profileHref === null}
+          onSelect={(e) => {
+            if (profileHref === null) return
+            e.preventDefault()
+            router.push(profileHref)
+          }}
+        >
           <User aria-hidden />
           Profil
         </DropdownMenuItem>

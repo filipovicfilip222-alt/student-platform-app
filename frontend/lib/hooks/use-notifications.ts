@@ -24,6 +24,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { notificationsApi } from "@/lib/api/notifications"
+import type { NotificationListParams } from "@/lib/api/notifications"
 import { useNotificationWsStatus } from "@/lib/stores/notification-ws-status"
 import type { NotificationResponse, Uuid } from "@/types"
 
@@ -36,7 +37,7 @@ export const NOTIFICATION_UNREAD_KEY = [
 const POLL_INTERVAL_MS = 30 * 1_000
 
 export function useNotifications(
-  params: { limit?: number; unread_only?: boolean } = {}
+  params: NotificationListParams = {}
 ) {
   const wsConnected = useNotificationWsStatus((s) => s.isConnected)
 

@@ -47,6 +47,28 @@ export interface SlotResponse {
   updated_at: IsoDateTime
 }
 
+/**
+ * Body za DELETE /professors/slots/{slot_id} — opciona personalizovana
+ * poruka izvinjenja koju studenti vide u notifikaciji + email-u kada
+ * profesor otkaže slot u kome su već zakazani termini.
+ *
+ * Source: backend/app/schemas/professor.py::SlotDeleteRequest
+ */
+export interface SlotDeleteRequest {
+  cancellation_message?: string | null
+}
+
+/**
+ * Response shape za DELETE /professors/slots/{slot_id}.
+ * `cancelled_count` = broj termina koji su prebačeni u CANCELLED status.
+ * Vrednost 0 znači da je slot bio prazan i fizički obrisan.
+ *
+ * Source: backend/app/schemas/professor.py::SlotDeleteResponse
+ */
+export interface SlotDeleteResponse {
+  cancelled_count: number
+}
+
 // ── Blackout periods ──────────────────────────────────────────────────────────
 // Source: backend/app/schemas/professor.py::BlackoutCreate/BlackoutResponse
 

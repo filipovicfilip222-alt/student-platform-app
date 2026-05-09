@@ -50,7 +50,7 @@ import { RequestRejectDialog } from "./request-reject-dialog"
 type InboxFilter = "PENDING" | "ALL"
 
 export function RequestsInbox() {
-  const [filter, setFilter] = useState<InboxFilter>("PENDING")
+  const [filter, setFilter] = useState<InboxFilter>("ALL")
   const [toApprove, setToApprove] = useState<AppointmentResponse | null>(null)
   const [toReject, setToReject] = useState<AppointmentResponse | null>(null)
   const [toDelegate, setToDelegate] = useState<AppointmentResponse | null>(null)
@@ -138,8 +138,8 @@ export function RequestsInbox() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="PENDING">Na čekanju</SelectItem>
               <SelectItem value="ALL">Svi zahtevi</SelectItem>
+              <SelectItem value="PENDING">Na čekanju</SelectItem>
             </SelectContent>
           </Select>
         </div>

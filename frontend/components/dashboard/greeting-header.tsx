@@ -21,7 +21,7 @@
 "use client"
 
 import { format } from "date-fns"
-import { sr } from "date-fns/locale"
+import { srLatn } from "date-fns/locale"
 import { useEffect, useMemo, useState } from "react"
 
 import { cn } from "@/lib/utils"
@@ -47,7 +47,7 @@ function getTimeBucket(hours: number): "jutro" | "dan" | "veče" {
 function formatLongDate(date: Date): string {
   // date-fns sr locale već daje srpsku latinicu sa malim slovima dana —
   // ručno kapitalizujemo prvo slovo (Nedelja, Ponedeljak, ...).
-  const formatted = format(date, "EEEE, d. MMMM yyyy.", { locale: sr })
+  const formatted = format(date, "EEEE, d. MMMM yyyy.", { locale: srLatn })
   return formatted.charAt(0).toUpperCase() + formatted.slice(1)
 }
 
@@ -69,7 +69,8 @@ export function GreetingHeader({
   const greeting = useMemo(() => {
     if (!now) return "Pozdrav"
     const bucket = getTimeBucket(now.getHours())
-    return `Dobro ${bucket}`
+    if (bucket === "dan") return "Dobar dan"
+    else return `Dobro ${bucket}`
   }, [now])
 
   const dateLine = useMemo(() => {

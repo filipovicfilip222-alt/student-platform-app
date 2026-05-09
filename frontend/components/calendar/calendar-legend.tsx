@@ -61,7 +61,8 @@ const PROFESSOR_ITEMS: LegendItem[] = [
   {
     key: "blocked",
     label: "Blackout",
-    swatchClass: "bg-muted",
+    swatchClass:
+      "border border-border bg-[repeating-linear-gradient(45deg,hsl(var(--muted-foreground)/0.35)_0,hsl(var(--muted-foreground)/0.35)_2px,transparent_2px,transparent_4px)]",
   },
 ]
 

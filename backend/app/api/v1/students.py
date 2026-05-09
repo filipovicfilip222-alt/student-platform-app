@@ -111,7 +111,7 @@ async def create_appointment(
 @router.delete(
     "/appointments/{id}",
     response_model=AppointmentCancelResponse,
-    summary="Otkazivanje termina (late-cancel strike < 12h)",
+    summary="Otkazivanje termina (late-cancel strike < 24h)",
 )
 async def cancel_appointment(
     id: UUID,

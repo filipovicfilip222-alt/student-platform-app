@@ -14,6 +14,7 @@
 
 "use client"
 
+import { useState } from "react"
 import { Bell, BellOff, CheckCheck } from "lucide-react"
 
 import {
@@ -40,6 +41,10 @@ const DROPDOWN_LIMIT = 10
 
 export function NotificationCenter() {
   const isAuthenticated = useAuthStore((s) => s.accessToken !== null)
+  // Controlled open state tako da klik na notifikaciju (koja navigira
+  // preko `next/navigation`) može da zatvori dropdown i ne ostane
+  // visi otvoren preko nove rute.
+  const [isOpen, setIsOpen] = useState(false)
 
   const listQuery = useNotifications({ limit: DROPDOWN_LIMIT })
   const unreadQuery = useUnreadCount()
@@ -79,7 +84,7 @@ export function NotificationCenter() {
   }
 
   return (
-    <Popover>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
@@ -130,6 +135,7 @@ export function NotificationCenter() {
                     <NotificationItem
                       notification={n}
                       onMarkRead={handleMarkRead}
+                      onAfterNavigate={() => setIsOpen(false)}
                     />
                   </li>
                 ))}

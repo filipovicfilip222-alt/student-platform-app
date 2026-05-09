@@ -18,7 +18,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Hourglass, MessageCircle } from "lucide-react"
 import { formatDistanceToNowStrict, isAfter } from "date-fns"
-import { sr } from "date-fns/locale"
+import { srLatn } from "date-fns/locale"
 
 import {
   Card,
@@ -76,7 +76,7 @@ function useChatCountdown(closesAt?: string | null) {
   const diffMs = target.getTime() - now.getTime()
   const isCritical = diffMs < 60 * 60 * 1000
   return {
-    label: formatDistanceToNowStrict(target, { locale: sr, addSuffix: false }),
+    label: formatDistanceToNowStrict(target, { locale: srLatn, addSuffix: false }),
     isCritical,
   }
 }

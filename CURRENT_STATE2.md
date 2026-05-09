@@ -381,7 +381,7 @@ Student_Platform_App/
 | GET   | `/professors/{id}` | profil + FAQ + slobodni slotovi |
 | GET   | `/professors/{id}/slots` | slobodni slotovi (start_date, end_date filter) |
 | POST  | `/appointments` | zakazivanje (Redis Lua lock) |
-| DELETE| `/appointments/{id}` | otkaz (LATE_CANCEL strike < 12h) |
+| DELETE| `/appointments/{id}` | otkaz (LATE_CANCEL strike < 24h) |
 | GET   | `/appointments?view=upcoming\|history` | moji termini |
 | POST  | `/waitlist/{slot_id}` | Redis Sorted Set join |
 | DELETE| `/waitlist/{slot_id}` | leave |

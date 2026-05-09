@@ -35,13 +35,16 @@ export const NAV_ITEMS: Record<Role, NavItem[]> = {
     { href: ROUTES.search, label: "Pretraga profesora", icon: Search },
     { href: ROUTES.myAppointments, label: "Moji termini", icon: Calendar },
     { href: ROUTES.documentRequests, label: "Zahtevi za dokumente", icon: FileText },
+    { href: ROUTES.studentBroadcasts, label: "Obaveštenja", icon: Megaphone },
   ],
   PROFESOR: [
     { href: ROUTES.professorDashboard, label: "Dashboard", icon: LayoutDashboard },
+    { href: ROUTES.professorBroadcasts, label: "Obaveštenja", icon: Megaphone },
     { href: ROUTES.professorSettings, label: "Podešavanja", icon: Settings },
   ],
   ASISTENT: [
     { href: ROUTES.professorDashboard, label: "Dashboard", icon: LayoutDashboard },
+    { href: ROUTES.professorBroadcasts, label: "Obaveštenja", icon: Megaphone },
     { href: ROUTES.professorSettings, label: "Podešavanja", icon: Settings },
   ],
   ADMIN: [

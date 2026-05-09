@@ -48,24 +48,46 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { CalendarLegend } from "@/components/calendar/calendar-legend"
 import { CalendarSkeleton } from "@/components/calendar/calendar-skeleton"
 import { RecurringRuleModal } from "@/components/calendar/recurring-rule-modal"
+import { srLatnLocale } from "@/lib/utils/fullcalendar-locale"
 import {
+  useBlackouts,
   useCreateSlot,
   useDeleteSlot,
   useMySlots,
   useUpdateSlot,
 } from "@/lib/hooks/use-availability"
 import { cn } from "@/lib/utils"
-import { formatDateTime } from "@/lib/utils/date"
-import { toastApiError, toastSuccess } from "@/lib/utils/errors"
-import type { SlotResponse } from "@/types"
+import { formatDate, formatDateTime } from "@/lib/utils/date"
+import { toastApiError, toastSuccess, toastWarning } from "@/lib/utils/errors"
+import type { BlackoutResponse, SlotResponse } from "@/types"
 
 export interface AvailabilityCalendarProps {
   /** ASISTENT view: disable creating/updating/deleting slots. */
   readOnly?: boolean
   className?: string
+}
+
+/**
+ * Vraća prvi blackout period (ako postoji) u koji upada ISO datetime
+ * slota. Poređenje se radi u UTC datumu jer backend
+ * (`search_service._available_slots_query`) takođe filtrira slotove
+ * preko `func.date(slot_datetime)` u UTC sesiji — moramo da pratimo isti
+ * pravac, inače "slot van blackout-a" lokalno može biti "u blackout-u"
+ * na serveru.
+ */
+function findOverlappingBlackout(
+  slotIso: string,
+  blackouts: BlackoutResponse[]
+): BlackoutResponse | null {
+  const ymd = slotIso.slice(0, 10)
+  return (
+    blackouts.find((b) => b.start_date <= ymd && ymd <= b.end_date) ?? null
+  )
 }
 
 export function AvailabilityCalendar({
@@ -74,6 +96,7 @@ export function AvailabilityCalendar({
 }: AvailabilityCalendarProps) {
   const calendarRef = useRef<FullCalendar | null>(null)
   const slotsQuery = useMySlots()
+  const blackoutsQuery = useBlackouts()
   const createMutation = useCreateSlot()
   const updateMutation = useUpdateSlot()
   const deleteMutation = useDeleteSlot()
@@ -82,11 +105,16 @@ export function AvailabilityCalendar({
   const [draftStart, setDraftStart] = useState<Date | null>(null)
   const [draftEnd, setDraftEnd] = useState<Date | null>(null)
   const [toDelete, setToDelete] = useState<SlotResponse | null>(null)
+  // Personalizovana poruka izvinjenja za studente koji su zakazali termin
+  // u slotu koji se otkazuje. Reset-uje se kad se dialog zatvori.
+  const [cancelMessage, setCancelMessage] = useState("")
 
   const events: EventInput[] = useMemo(() => {
     const slots = slotsQuery.data ?? []
+    const blackouts = blackoutsQuery.data ?? []
     const now = Date.now()
-    return slots.map((slot) => {
+
+    const slotEvents: EventInput[] = slots.map((slot) => {
       const start = new Date(slot.slot_datetime)
       const end = new Date(start.getTime() + slot.duration_minutes * 60 * 1000)
       const isRecurring = Boolean(slot.recurring_rule)
@@ -106,7 +134,27 @@ export function AvailabilityCalendar({
         extendedProps: { slot, isRecurring, isPast },
       }
     })
-  }, [slotsQuery.data, readOnly])
+
+    // Blackout periodi se renderuju kao FullCalendar background eventi —
+    // ne mogu se selektovati ni klikati, ali pokrivaju ceo dan i jasno
+    // pokazuju profesoru da su tu studenti slepi za njegove slotove.
+    // `end_date` je INCLUSIVE u našoj backend semantici, a FullCalendar
+    // tretira `end` kao EXCLUSIVE, pa dodajemo +1 dan na end.
+    const blackoutEvents: EventInput[] = blackouts.map((b) => {
+      const endExclusive = new Date(`${b.end_date}T00:00:00`)
+      endExclusive.setDate(endExclusive.getDate() + 1)
+      return {
+        id: `blackout-${b.id}`,
+        start: `${b.start_date}T00:00:00`,
+        end: endExclusive.toISOString().slice(0, 10),
+        display: "background",
+        classNames: ["fc-event--blackout"],
+        title: b.reason ? `Blackout: ${b.reason}` : "Blackout",
+      }
+    })
+
+    return [...blackoutEvents, ...slotEvents]
+  }, [slotsQuery.data, blackoutsQuery.data, readOnly])
 
   function renderEventContent(arg: EventContentArg) {
     const { isRecurring } = arg.event.extendedProps as { isRecurring?: boolean }
@@ -183,6 +231,34 @@ export function AvailabilityCalendar({
           ? "Rekurentni slot je kreiran."
           : "Slot je kreiran."
       )
+
+      // Profesor možda nije svestan da slot upada u njegov vlastiti
+      // blackout period — backend taj slot uredno krije od studenata
+      // (`search_service._available_slots_query` filtrira preko
+      // `overlaps_blackout`), pa bez ovog toasta deluje kao da je nešto
+      // polomljeno: profesor vidi slot na svom kalendaru, student ga
+      // ne vidi. Proveru radimo samo na single-slot kreiranju — za
+      // rekurentne serije uradićemo opštu napomenu jer ne znamo sve
+      // generisane datume na klijentu.
+      const blackouts = blackoutsQuery.data ?? []
+      if (!payload.recurring_rule && blackouts.length > 0) {
+        const overlap = findOverlappingBlackout(payload.slot_datetime, blackouts)
+        if (overlap) {
+          toastWarning(
+            "Slot upada u blackout period",
+            `Studenti neće videti ovaj termin dok je blackout ${formatDate(
+              overlap.start_date
+            )} – ${formatDate(overlap.end_date)} aktivan. ` +
+              `Obrišite blackout ako želite da slot bude vidljiv.`
+          )
+        }
+      } else if (payload.recurring_rule && blackouts.length > 0) {
+        toastWarning(
+          "Proverite blackout periode",
+          "Pojedini termini iz rekurentne serije možda upadaju u tvoj blackout period i neće biti vidljivi studentima."
+        )
+      }
+
       setModalOpen(false)
     } catch (err) {
       toastApiError(err, "Greška pri kreiranju slota.")
@@ -191,12 +267,25 @@ export function AvailabilityCalendar({
 
   async function handleConfirmDelete() {
     if (!toDelete) return
+    const trimmed = cancelMessage.trim()
     try {
-      await deleteMutation.mutateAsync(toDelete.id)
-      toastSuccess("Slot je obrisan.")
+      const result = await deleteMutation.mutateAsync({
+        id: toDelete.id,
+        data: trimmed ? { cancellation_message: trimmed } : undefined,
+      })
+      if (result.cancelled_count > 0) {
+        const word =
+          result.cancelled_count === 1
+            ? "termin je otkazan i student je obavešten"
+            : `termina je otkazano i studenti su obavešteni`
+        toastSuccess(`${result.cancelled_count} ${word}.`)
+      } else {
+        toastSuccess("Slot je obrisan.")
+      }
       setToDelete(null)
+      setCancelMessage("")
     } catch (err) {
-      toastApiError(err, "Greška pri brisanju slota.")
+      toastApiError(err, "Greška pri otkazivanju slota.")
     }
   }
 
@@ -235,7 +324,7 @@ export function AvailabilityCalendar({
               right: "timeGridWeek,dayGridMonth,timeGridDay,listWeek",
             }}
             firstDay={1}
-            locale="sr"
+            locale={srLatnLocale}
             allDaySlot={false}
             slotMinTime="07:00:00"
             slotMaxTime="22:00:00"
@@ -292,14 +381,19 @@ export function AvailabilityCalendar({
 
       <AlertDialog
         open={toDelete !== null}
-        onOpenChange={(open) => !open && setToDelete(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setToDelete(null)
+            setCancelMessage("")
+          }
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogMedia>
               <Trash2 className="text-destructive" aria-hidden />
             </AlertDialogMedia>
-            <AlertDialogTitle>Obrisati slot?</AlertDialogTitle>
+            <AlertDialogTitle>Otkazati slot?</AlertDialogTitle>
             <AlertDialogDescription>
               {toDelete && (
                 <>
@@ -307,11 +401,33 @@ export function AvailabilityCalendar({
                   <strong className="font-semibold text-foreground">
                     {formatDateTime(toDelete.slot_datetime)}
                   </strong>
-                  . Ova akcija se ne može opozvati.
+                  . Ako su studenti zakazali termin u ovom slotu, biće
+                  obavešteni o otkazivanju (in-app, email i push).
                 </>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          <div className="space-y-1.5 px-1">
+            <Label htmlFor="cancel-message" className="text-xs font-medium">
+              Poruka izvinjenja (opciono)
+            </Label>
+            <Textarea
+              id="cancel-message"
+              value={cancelMessage}
+              onChange={(e) => setCancelMessage(e.target.value)}
+              placeholder="Izvinjavam se zbog neprijatnosti, javiću novi termin u toku dana…"
+              maxLength={500}
+              rows={3}
+              disabled={deleteMutation.isPending}
+              className="resize-none"
+            />
+            <p className="text-[0.7rem] text-muted-foreground">
+              Ako ostavite prazno, šaljemo standardnu izvinjavajuću poruku.
+              ({cancelMessage.length}/500)
+            </p>
+          </div>
+
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteMutation.isPending}>
               Odustani
@@ -327,10 +443,10 @@ export function AvailabilityCalendar({
               {deleteMutation.isPending ? (
                 <>
                   <Loader2 className="animate-spin" aria-hidden />
-                  Brišem...
+                  Otkazujem...
                 </>
               ) : (
-                "Obriši slot"
+                "Otkaži slot"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

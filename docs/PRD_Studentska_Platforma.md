@@ -249,7 +249,7 @@ Student može podnositi zahteve za zvanične dokumente direktno iz aplikacije.
 
 | Prekršaj | Poeni | Automatizacija |
 |----------|-------|----------------|
-| Otkazivanje < 12h | +1 | Automatski |
+| Otkazivanje < 24h | +1 | Automatski |
 | Nepojavljivanje | +2 | Automatski 30min posle termina |
 
 | Poeni | Posledica |

@@ -14,11 +14,14 @@
 "use client"
 
 import { Bell } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 import {
   getNotificationToneClasses,
   getNotificationVisual,
 } from "@/lib/notifications/icons"
+import { getNotificationHref } from "@/lib/notifications/navigation"
+import { useAuthStore } from "@/lib/stores/auth"
 import { cn } from "@/lib/utils"
 import { formatSmartRelative } from "@/lib/utils/relative-time"
 import type { NotificationResponse } from "@/types/notification"
@@ -26,24 +29,34 @@ import type { NotificationResponse } from "@/types/notification"
 export interface NotificationItemProps {
   notification: NotificationResponse
   onMarkRead?: (id: string) => void
+  /**
+   * Pozvano POSLE uspešne navigacije (ili posle klika kad nema mete).
+   * Bell dropdown ovo koristi da zatvori `<Popover>` — bez ovoga klik
+   * navigira ali popover ostaje otvoren preko nove rute.
+   */
+  onAfterNavigate?: () => void
   className?: string
 }
 
 export function NotificationItem({
   notification,
   onMarkRead,
+  onAfterNavigate,
   className,
 }: NotificationItemProps) {
+  const router = useRouter()
+  const role = useAuthStore((s) => s.user?.role ?? null)
   const visual = getNotificationVisual(notification.type)
   const Icon = visual.icon ?? Bell
   const toneClasses = getNotificationToneClasses(visual.tone)
+  const href = getNotificationHref(notification, role)
 
   function handleClick() {
     if (!notification.is_read) onMarkRead?.(notification.id)
-    // TODO(phase-6): navigate based on `notification.data`
-    //   - APPOINTMENT_* → /appointments/{data.appointment_id}
-    //   - DOCUMENT_REQUEST_* → /document-requests
-    //   - WAITLIST_OFFER → /professor/{data.professor_id}
+    if (href) {
+      router.push(href)
+    }
+    onAfterNavigate?.()
   }
 
   return (

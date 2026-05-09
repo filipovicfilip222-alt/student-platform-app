@@ -65,3 +65,12 @@ export function toastApiError(err: unknown, fallback = "Nepoznata greška"): voi
 export function toastSuccess(message: string, description?: string): void {
   toast.success(message, description ? { description } : undefined)
 }
+
+/**
+ * Non-blocking upozoravajući toast — koristimo za situacije kada akcija
+ * uspe ali ima caveat o kome korisnik mora znati (npr. slot uspešno
+ * sačuvan, ali pada u postojeći blackout pa ga studenti neće videti).
+ */
+export function toastWarning(message: string, description?: string): void {
+  toast.warning(message, description ? { description } : undefined)
+}

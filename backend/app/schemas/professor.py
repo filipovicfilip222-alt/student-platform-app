@@ -104,6 +104,36 @@ class SlotResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SlotDeleteRequest(BaseModel):
+    """Body za DELETE /professors/slots/{slot_id}.
+
+    Profesor može da otkaže slot u bilo kom trenutku. Ako u slotu postoje
+    aktivni termini (PENDING/APPROVED), studenti dobijaju notifikaciju
+    sa ovom porukom kao razlogom otkazivanja. Ako je polje prazno ili
+    izostavljeno, koristi se podrazumevana izvinjavajuća poruka.
+    """
+    cancellation_message: str | None = Field(
+        default=None,
+        max_length=500,
+        description=(
+            "Opciona personalizovana poruka izvinjenja koju studenti vide "
+            "u notifikaciji i email-u. Max 500 karaktera. Ostaje prazno → "
+            "default izvinjavajuća poruka."
+        ),
+    )
+
+
+class SlotDeleteResponse(BaseModel):
+    """Rezultat otkazivanja slota.
+
+    ``cancelled_count`` je broj appointment-a koji su prebačeni u
+    ``CANCELLED`` (i koji su tako pokrenuli notifikaciju studentima).
+    Frontend ovaj broj koristi za toast: "Otkazana 3 termina i poslate
+    su notifikacije studentima.".
+    """
+    cancelled_count: int = Field(ge=0)
+
+
 class RecurringConflict(BaseModel):
     """
     Vraća se u 422 telu kada `create_slot` (ili DELETE recurring grupe)

@@ -150,7 +150,7 @@ GET    /api/v1/students/appointments        — moji termini (filter: upcoming/h
 - `backend/app/tasks/strike_tasks.py` — Celery task za no-show detekciju
 
 **Logika:**
-- Pri otkazivanju < 12h → automatski +1 poen → proveri da li treba blokada
+- Pri otkazivanju < 24h → automatski +1 poen → proveri da li treba blokada
 - Celery beat task: svakih 30 min proverava termine koji su završili pre 30 min → ako `APPROVED` i nema potvrde → +2 poena, status → `NO_SHOW`
 - 3+ poena → kreira `StudentBlock` zapis sa `blocked_until = now + 14 dana`
 - 4+ poena → svaki sledeći prekršaj produžava za 7 dana

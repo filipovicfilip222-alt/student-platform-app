@@ -35,6 +35,7 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.dependencies import CurrentUser, DBSession, RedisClient, get_redis
 from app.core.ws_deps import decode_ws_token
+from app.models.enums import NotificationType
 from app.schemas.auth import MessageResponse
 from app.schemas.notification import (
     NotificationResponse,
@@ -69,15 +70,33 @@ async def list_notifications(
     current_user: CurrentUser,
     limit: int = Query(default=50, ge=1, le=100),
     unread_only: bool = Query(default=False),
+    type: NotificationType | None = Query(
+        default=None,
+        description=(
+            "Filter po jednoj vrednosti `NotificationType`. Frontend strana "
+            "`/professor/broadcasts` ovo koristi za `type=BROADCAST` da bi "
+            "prikazala samo poruke od admin-a. Default (None) = bez filtera."
+        ),
+    ),
 ) -> list[NotificationResponse]:
     """Vraća sopstvene notifikacije sortirane DESC po ``created_at``.
 
     ``limit`` je hard-cap-ovan na 100 — frontend dropdown trenutno
     prikazuje top 10 a hooks default-uju na 50, paginated wrapper nije
     deo V1 ugovora (vidi ``schemas/notification.py`` JSDoc).
+
+    ``type`` filter je dodat za dedicirane „view-by-type" stranice
+    (broadcast-only profesorska stranica) gde mixed limit=50 prozor nije
+    pouzdan za retke type-ove. Validacija ide kroz Pydantic enum dakle
+    nepoznata vrednost vraća 422.
     """
+    types_filter = (type,) if type is not None else None
     return await notification_service.list_recent(
-        db, current_user.id, limit=limit, unread_only=unread_only
+        db,
+        current_user.id,
+        limit=limit,
+        unread_only=unread_only,
+        types=types_filter,
     )
 
 

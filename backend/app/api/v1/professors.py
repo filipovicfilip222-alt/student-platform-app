@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Body, Query, Response, status
 
 from app.core.dependencies import (
     CurrentProfesor,
@@ -29,6 +29,8 @@ from app.schemas.professor import (
     RequestInboxRow,
     RequestRejectRequest,
     SlotCreate,
+    SlotDeleteRequest,
+    SlotDeleteResponse,
     SlotResponse,
     SlotUpdate,
 )
@@ -116,16 +118,32 @@ async def update_slot(
 
 @router.delete(
     "/slots/{slot_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Brisanje availability slota",
+    response_model=SlotDeleteResponse,
+    summary="Otkazivanje availability slota (obrisi ili otkazi termine)",
+    description=(
+        "Profesor može otkazati slot bez obzira da li su u njemu već "
+        "zakazani termini. Body je opcioni — ako se prosledi "
+        "`cancellation_message`, ona se prikazuje studentima u notifikaciji "
+        "i email-u (max 500 karaktera). Ako se izostavi ili je prazna, "
+        "koristi se podrazumevana izvinjavajuća poruka.\n\n"
+        "Vraća `cancelled_count` = broj termina koji su prebačeni u "
+        "CANCELLED status (svaki je pokrenuo notifikaciju studentu). "
+        "Vrednost 0 znači da je slot bio prazan i fizički obrisan."
+    ),
 )
 async def delete_slot(
     slot_id: UUID,
     db: DBSession,
     current_user: CurrentProfesor,
-) -> Response:
-    await availability_service.delete_slot(db, current_user, slot_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    payload: SlotDeleteRequest | None = Body(default=None),
+) -> SlotDeleteResponse:
+    cancelled = await availability_service.delete_slot(
+        db,
+        current_user,
+        slot_id,
+        cancellation_message=payload.cancellation_message if payload else None,
+    )
+    return SlotDeleteResponse(cancelled_count=cancelled)
 
 
 @router.post(

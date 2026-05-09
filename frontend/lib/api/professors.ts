@@ -25,6 +25,8 @@ import type {
   ProfessorMeResponse,
   ProfessorProfileUpdate,
   SlotCreateRequest,
+  SlotDeleteRequest,
+  SlotDeleteResponse,
   SlotResponse,
   SlotUpdateRequest,
   Uuid,
@@ -36,16 +38,33 @@ export const professorsApi = {
   listMySlots: () =>
     api.get<SlotResponse[]>("/professors/slots").then((r) => r.data),
 
+  // Backend (`POST /professors/slots`) vraća **listu** kreiranih slotova
+  // — single-shot kreira [slot], rekurentno pravilo materijalizuje N
+  // slotova sa istim `recurring_group_id`. Tipujemo kao niz da TanStack
+  // Query mutation kontekst dobije ispravan oblik (callers ne koriste
+  // povratnu vrednost direktno, ali type-mismatch zna da ujede kasnije).
   createSlot: (data: SlotCreateRequest) =>
-    api.post<SlotResponse>("/professors/slots", data).then((r) => r.data),
+    api.post<SlotResponse[]>("/professors/slots", data).then((r) => r.data),
 
   updateSlot: (slotId: Uuid, data: SlotUpdateRequest) =>
     api
       .put<SlotResponse>(`/professors/slots/${slotId}`, data)
       .then((r) => r.data),
 
-  deleteSlot: (slotId: Uuid) =>
-    api.delete<void>(`/professors/slots/${slotId}`).then((r) => r.data),
+  /**
+   * Otkazivanje slota. Ako u slotu postoje aktivni termini (PENDING/APPROVED),
+   * backend će ih prebaciti u CANCELLED i poslati notifikaciju studentima sa
+   * `cancellation_message` (ili default izvinjavajućom porukom). Ako je
+   * `data` izostavljeno, backend koristi default poruku.
+   *
+   * Axios DELETE sa body-jem zahteva `data` field unutar config objekta —
+   * `axios.delete(url, body)` ne radi (drugi parametar je config), pa
+   * eksplicitno prosleđujemo `{ data }`.
+   */
+  deleteSlot: (slotId: Uuid, data?: SlotDeleteRequest) =>
+    api
+      .delete<SlotDeleteResponse>(`/professors/slots/${slotId}`, { data })
+      .then((r) => r.data),
 
   // ── Blackout periods ────────────────────────────────────────────────────
   createBlackout: (data: BlackoutCreateRequest) =>

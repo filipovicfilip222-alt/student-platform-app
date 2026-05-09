@@ -30,7 +30,7 @@ import {
   isYesterday,
   parseISO,
 } from "date-fns"
-import { sr } from "date-fns/locale"
+import { srLatn } from "date-fns/locale"
 
 type DateInput = Date | string
 
@@ -60,8 +60,8 @@ export function formatSmartRelative(value: DateInput): string {
   }
 
   if (isSameYear(date, now)) {
-    return format(date, "d. MMM", { locale: sr })
+    return format(date, "d. MMM", { locale: srLatn })
   }
 
-  return format(date, "dd.MM.yyyy.", { locale: sr })
+  return format(date, "dd.MM.yyyy.", { locale: srLatn })
 }

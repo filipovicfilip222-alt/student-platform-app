@@ -16,6 +16,8 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 
 from app.core.config import settings
 from app.core.dependencies import CurrentUser, DBSession, RedisClient
+from app.models.enums import UserRole
+from app.models.user import User
 from app.schemas.auth import (
     ForgotPasswordRequest,
     LoginRequest,
@@ -25,7 +27,33 @@ from app.schemas.auth import (
     TokenResponse,
     UserResponse,
 )
-from app.services import auth_service
+from app.services import auth_service, strike_service
+
+
+async def _build_user_response(db, user: User) -> UserResponse:
+    """Centralni helper za UserResponse — uključuje strike sistem za studente.
+
+    Frontend StrikeStatusCard čita `total_strike_points` i `blocked_until`
+    direktno iz user objekta (umesto odvojenog endpoint-a) tako da se
+    strike status osvežava istim ciklusom kao i ostatak profila — preko
+    `/auth/me` na page load i `/auth/refresh` na sliding cookie.
+
+    Za ne-studente ova polja ostaju 0 / None — fizički ih ne pišemo u
+    bazu, a `StudentBlock` tabela ima FK ka `users.id` sa CASCADE pa ne
+    može biti orfan rekord ako je user obrisan.
+    """
+    base = UserResponse.model_validate(user)
+    if user.role != UserRole.STUDENT:
+        return base
+
+    total_points = await strike_service.get_total_strike_points(db, user.id)
+    block = await strike_service.get_active_block(db, user.id)
+    return base.model_copy(
+        update={
+            "total_strike_points": total_points,
+            "blocked_until": block.blocked_until if block else None,
+        }
+    )
 
 router = APIRouter()
 
@@ -70,7 +98,7 @@ async def register(
     response: Response,
 ) -> UserResponse:
     user = await auth_service.register(db, data)
-    return UserResponse.model_validate(user)
+    return await _build_user_response(db, user)
 
 
 # ── POST /login ────────────────────────────────────────────────────────────────
@@ -102,7 +130,7 @@ async def login(
 
     return TokenResponse(
         access_token=access_token,
-        user=UserResponse.model_validate(user),
+        user=await _build_user_response(db, user),
     )
 
 
@@ -139,7 +167,7 @@ async def refresh(
 
     return TokenResponse(
         access_token=new_access,
-        user=UserResponse.model_validate(user),
+        user=await _build_user_response(db, user),
     )
 
 
@@ -215,5 +243,5 @@ async def reset_password(
     summary="Trenutno prijavljeni korisnik",
     description="Vraća podatke trenutno autentifikovanog korisnika.",
 )
-async def me(current_user: CurrentUser) -> UserResponse:
-    return UserResponse.model_validate(current_user)
+async def me(current_user: CurrentUser, db: DBSession) -> UserResponse:
+    return await _build_user_response(db, current_user)

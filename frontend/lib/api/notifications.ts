@@ -20,6 +20,7 @@ import api from "@/lib/api"
 import type {
   MessageResponse,
   NotificationResponse,
+  NotificationType,
   PushSubscribeRequest,
   PushSubscriptionResponse,
   PushUnsubscribeRequest,
@@ -28,8 +29,17 @@ import type {
   VapidPublicKeyResponse,
 } from "@/types"
 
+export interface NotificationListParams {
+  limit?: number
+  unread_only?: boolean
+  /** Server-side filter po jednoj vrednosti `NotificationType` (npr.
+   * `"BROADCAST"`). Backend mapira na SQL `type IN (...)` jer ``limit=50``
+   * prozor nije pouzdan za retke type-ove kad je channel mixed. */
+  type?: NotificationType
+}
+
 export const notificationsApi = {
-  list: (params: { limit?: number; unread_only?: boolean } = {}) =>
+  list: (params: NotificationListParams = {}) =>
     api
       .get<NotificationResponse[]>("/notifications", { params })
       .then((r) => r.data),

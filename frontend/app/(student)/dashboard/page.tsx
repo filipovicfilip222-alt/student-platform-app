@@ -133,9 +133,10 @@ export default function DashboardPage() {
       {/* 2-col: Notifs + Strike */}
       <section className="grid gap-4 lg:grid-cols-2">
         <RecentNotificationsCard limit={5} />
-        {/* TODO: wire to /auth/me.total_strike_points + .blocked_until once
-            backend UserResponse exposes the fields (FRONTEND_STRUKTURA § 7.3). */}
-        <StrikeStatusCard points={0} blockedUntil={null} />
+        <StrikeStatusCard
+          points={user?.total_strike_points ?? 0}
+          blockedUntil={user?.blocked_until ?? null}
+        />
       </section>
 
       {/* Remaining upcoming appointments — sve preko prvog */}

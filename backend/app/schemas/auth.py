@@ -53,6 +53,15 @@ class UserResponse(BaseModel):
     profile_image_url: str | None
     created_at: datetime
 
+    # Strike sistem (PRD §5.3) — relevantno samo za STUDENT uloge.
+    # Za ostale uloge ovi fildovi su uvek 0 / None.
+    # Frontend StrikeStatusCard čita direktno odavde umesto da održava
+    # poseban query — strike data ide kroz isti `/auth/me` ciklus kao i
+    # ostali profilski podaci, pa svaki refresh access tokena (svakih
+    # 15 min default-no) automatski osveži broj poena i status blokade.
+    total_strike_points: int = 0
+    blocked_until: datetime | None = None
+
     model_config = {"from_attributes": True}
 
 

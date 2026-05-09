@@ -125,16 +125,27 @@ async def list_recent(
     *,
     limit: int = 50,
     unread_only: bool = False,
+    types: tuple[NotificationType, ...] | None = None,
 ) -> list[NotificationResponse]:
     """Vraća poslednjih ``limit`` notifikacija za korisnika, najnovije prvo.
 
     Frontend ``useNotifications`` zove ovo bez paginacije — limit je
-    dovoljan jer dropdown prikazuje top 10, a "Vidi sve" stranica nije
-    deo V1 (frontend trenutno render-uje sve što stigne).
+    dovoljan jer dropdown prikazuje top 10, a dedicirane "view-by-type"
+    stranice (npr. profesorska ``/professor/broadcasts``) prosleđuju
+    ``types=("BROADCAST",)`` da bi dobile samo broadcast obaveštenja
+    bez client-side filtriranja (paginated prozor od 50 nije bezbedan
+    za retke type-ove kao BROADCAST kad je channel mixed).
+
+    ``types`` je tuple radi imutabilnosti i pattern-matching-a (server
+    sloj ne sme da prima list-ove jer Pydantic ne validira mutability,
+    a SQLAlchemy ``in_`` prima i tuple). Default ``None`` = bez filtera
+    — backward kompatibilan sa svim postojećim pozivima.
     """
     stmt = select(Notification).where(Notification.user_id == user_id)
     if unread_only:
         stmt = stmt.where(Notification.is_read.is_(False))
+    if types:
+        stmt = stmt.where(Notification.type.in_([t.value for t in types]))
     stmt = stmt.order_by(Notification.created_at.desc()).limit(limit)
 
     result = await db.execute(stmt)

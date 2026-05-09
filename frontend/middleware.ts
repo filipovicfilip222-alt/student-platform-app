@@ -13,7 +13,9 @@ const PUBLIC_PATHS = [
 const ROLE_PREFIXES: Record<string, string> = {
   "/admin": "ADMIN",
   "/professor/dashboard": "PROFESOR",
+  "/professor/broadcasts": "PROFESOR",
   "/professor/settings": "PROFESOR",
+  "/broadcasts": "STUDENT",
 }
 
 export function middleware(request: NextRequest) {

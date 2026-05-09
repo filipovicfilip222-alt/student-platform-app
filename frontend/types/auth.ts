@@ -15,6 +15,13 @@ export interface UserResponse {
   is_verified: boolean
   profile_image_url: string | null
   created_at: string
+  /**
+   * Strike sistem (PRD §5.3) — relevantno samo za STUDENT-e.
+   * Backend popunjava preko `_build_user_response` u `auth.py`.
+   * Za ostale uloge uvek `0` / `null`.
+   */
+  total_strike_points: number
+  blocked_until: string | null
 }
 
 export interface TokenResponse {

@@ -19,9 +19,11 @@ export const ROUTES = {
   myAppointments: "/my-appointments",
   appointment: (id: string) => `/appointments/${id}`,
   documentRequests: "/document-requests",
+  studentBroadcasts: "/broadcasts",
 
   // ── Professor / Asistent ─────────────────────────────────────────────────
   professorDashboard: "/professor/dashboard",
+  professorBroadcasts: "/professor/broadcasts",
   professorSettings: "/professor/settings",
 
   // ── Admin ─────────────────────────────────────────────────────────────────

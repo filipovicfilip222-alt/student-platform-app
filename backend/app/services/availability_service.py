@@ -390,7 +390,53 @@ async def update_slot(
     return slot
 
 
-async def delete_slot(db: AsyncSession, current_user: User, slot_id: UUID) -> None:
+# Default poruka izvinjenja kada profesor otkaže slot bez upisivanja
+# personalizovane poruke. PRD §5.2 traži emocionalnu notu u cancel-by-prof
+# notifikaciji — ova rečenica je generička ali učtiva fallback.
+_DEFAULT_SLOT_CANCEL_REASON = (
+    "Profesor je otkazao termin. Izvinjavamo se zbog neprijatnosti "
+    "i hvala na razumevanju."
+)
+
+# Statusi appointment-a koji se SMATRAJU "otvorenim" za smisao otkazivanja
+# slota — sve ostalo (REJECTED/CANCELLED/COMPLETED/NO_SHOW) je već
+# završeno i ne treba dodatno notifikovati.
+_NON_TERMINAL_APPT_STATUSES = (
+    AppointmentStatus.PENDING,
+    AppointmentStatus.APPROVED,
+)
+
+
+async def delete_slot(
+    db: AsyncSession,
+    current_user: User,
+    slot_id: UUID,
+    cancellation_message: str | None = None,
+) -> int:
+    """Otkazivanje availability slota.
+
+    Profesor može otkazati slot u **bilo kom slučaju**, bez obzira da li
+    je neki student rezervisao termin u njemu. Ponašanje:
+
+      • Slot bez vezanih termina → fizički ``DELETE`` reda (clean state).
+      • Slot sa otvorenim terminima (PENDING/APPROVED) → svi termini
+        prebacuju se u ``CANCELLED``, slot se mark-uje ``is_available=False``
+        (ne brišemo ga jer ``Appointment.slot_id`` ima ``ondelete=RESTRICT``
+        i odbijenim/otkazanim terminima FK ostaje validan zarad audit-a).
+        Svaki pogođeni student dobija notifikaciju (in-app + email + push)
+        sa razlogom = ``cancellation_message`` (ili default izvinjavajuće
+        poruke ako profesor nije popunio polje).
+
+    Args:
+        cancellation_message: Opciona poruka izvinjenja koju će studenti
+            videti u notifikaciji i email-u. Ako je ``None`` ili prazna
+            posle strip-a, koristi se ``_DEFAULT_SLOT_CANCEL_REASON``.
+
+    Returns:
+        Broj otkazanih appointment-a (0 ako je slot bio prazan i fizički
+        obrisan). Frontend koristi ovu vrednost za "X termina otkazana"
+        toast.
+    """
     professor = await _get_professor_profile_or_404(db, current_user.id)
 
     result = await db.execute(
@@ -407,17 +453,71 @@ async def delete_slot(db: AsyncSession, current_user: User, slot_id: UUID) -> No
             detail="Slot nije pronađen.",
         )
 
-    appointment_exists = await db.execute(
-        select(Appointment.id).where(Appointment.slot_id == slot.id)
-    )
-    if appointment_exists.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Slot ima povezane termine i ne može biti obrisan.",
+    # ── Pronalazimo sve "otvorene" termine na ovom slotu ──────────────────
+    open_appts_result = await db.execute(
+        select(Appointment).where(
+            Appointment.slot_id == slot.id,
+            Appointment.status.in_(_NON_TERMINAL_APPT_STATUSES),
         )
+    )
+    open_appts: list[Appointment] = list(open_appts_result.scalars().all())
 
-    await db.delete(slot)
-    await db.flush()
+    # ── Slučaj A: prazan slot — fizički delete ────────────────────────────
+    if not open_appts:
+        # Mogu postojati TERMINAL appointment-i (CANCELLED/REJECTED/COMPLETED)
+        # iz prošlosti — ako postoje, FK RESTRICT zabranjuje fizički delete.
+        # U tom slučaju samo gasimo dostupnost (slot je već "potrošen" i nije
+        # vidljiv studentima) umesto da raise-ujemo grešku — bezbedan no-op
+        # za UX.
+        any_appt_result = await db.execute(
+            select(Appointment.id).where(Appointment.slot_id == slot.id).limit(1)
+        )
+        has_terminal_link = any_appt_result.scalar_one_or_none() is not None
+        if has_terminal_link:
+            slot.is_available = False
+            await db.flush()
+        else:
+            await db.delete(slot)
+            await db.flush()
+        return 0
+
+    # ── Slučaj B: ima zakazanih termina — cancel-with-notification ────────
+    reason = (cancellation_message or "").strip() or _DEFAULT_SLOT_CANCEL_REASON
+
+    for appt in open_appts:
+        appt.status = AppointmentStatus.CANCELLED
+        appt.rejection_reason = reason
+
+    # Slot ostaje u bazi (FK RESTRICT) ali ga gasimo da bude nevidljiv
+    # studentima i da ne može da se ponovo zakaže.
+    slot.is_available = False
+
+    # Eksplicitan commit pre Celery dispatch-a — task učitava appointment
+    # iz baze i očekuje da je status već CANCELLED commit-ovan (isti
+    # pattern kao u ``create_blackout`` i ``cancel_appointment``).
+    await db.commit()
+
+    # Lazy import sprečava cikličnu zavisnost (tasks → services → tasks).
+    from app.tasks.notifications import send_appointment_cancelled
+
+    for appt in open_appts:
+        try:
+            send_appointment_cancelled.delay(str(appt.id), "PROFESOR", reason)
+        except Exception as exc:  # noqa: BLE001
+            _log.warning(
+                "availability_service.delete_slot: Celery dispatch failed "
+                "appointment=%s err=%s — student će biti notifikovan pri "
+                "sledećem reminder-u",
+                appt.id, exc,
+            )
+
+    _log.info(
+        "availability_service.delete_slot: slot=%s professor=%s "
+        "cancelled %d appointment(e), is_available=False",
+        slot.id, professor.id, len(open_appts),
+    )
+
+    return len(open_appts)
 
 
 async def delete_recurring_group(

@@ -31,6 +31,7 @@ import { useEffect, useRef } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
+import { authApi } from "@/lib/api/auth"
 import {
   NOTIFICATION_LIST_KEY,
   NOTIFICATION_UNREAD_KEY,
@@ -43,13 +44,26 @@ import type {
   NotificationSocketHandle,
   NotificationSocketStatus,
 } from "@/lib/ws/notification-socket"
-import type { NotificationResponse } from "@/types/notification"
+import type { NotificationResponse, NotificationType } from "@/types/notification"
 import { shouldShowToast } from "@/types/notification"
 import type { NotificationWsEvent } from "@/types/ws"
+
+/**
+ * Tipovi notifikacija koji utiču na `UserResponse.total_strike_points`
+ * ili `blocked_until` — kad ovi stignu preko WS-a, refresh-ujemo
+ * korisnika preko `/auth/me` da bi `<StrikeStatusCard>` na dashboard-u
+ * pokazao tačan broj poena bez čekanja na sledeći page load.
+ */
+const STRIKE_AFFECTING_TYPES: ReadonlySet<NotificationType> = new Set([
+  "STRIKE_ADDED",
+  "BLOCK_ACTIVATED",
+  "BLOCK_LIFTED",
+])
 
 export function NotificationStream(): null {
   const accessToken = useAuthStore((s) => s.accessToken)
   const userId = useAuthStore((s) => s.user?.id ?? null)
+  const setUser = useAuthStore((s) => s.setUser)
   const qc = useQueryClient()
   const setConnected = useNotificationWsStatus((s) => s.setConnected)
   const markUnavailable = useNotificationWsStatus((s) => s.markUnavailable)
@@ -89,6 +103,19 @@ export function NotificationStream(): null {
         // /notifikacije (ako bude implementirano) ili u tihom no-op.
         if (shouldShowToast(notif.type)) {
           toast.message(getToastTitle(notif.type), { description: notif.body })
+        }
+
+        // Strike sistem — kad backend doda strike ili promeni status
+        // blokade, sinhronizuj `useAuthStore.user.total_strike_points` /
+        // `blocked_until` da dashboard badge odmah odražava novo stanje.
+        // Failure mode: ako /auth/me padne (npr. 401 mid-refresh),
+        // tihom no-op — sledeći /auth/refresh ciklus će ionako vratiti
+        // sveže podatke, a strike notif u listi je već update-ovan.
+        if (STRIKE_AFFECTING_TYPES.has(notif.type)) {
+          authApi
+            .me()
+            .then((r) => setUser(r.data))
+            .catch(() => undefined)
         }
         return
       }
@@ -142,7 +169,15 @@ export function NotificationStream(): null {
       // from a clean slate (e.g. token swap after /auth/refresh).
       resetWsStatus()
     }
-  }, [accessToken, userId, qc, setConnected, markUnavailable, resetWsStatus])
+  }, [
+    accessToken,
+    userId,
+    qc,
+    setConnected,
+    markUnavailable,
+    resetWsStatus,
+    setUser,
+  ])
 
   return null
 }

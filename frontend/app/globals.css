@@ -19,6 +19,16 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/**
+ * Radix UI primitives expose state through `data-state="active|inactive|open|closed|..."`.
+ * Tailwind v4's `data-foo:` shorthand only matches *attribute presence* — it would NOT
+ * match `data-state="active"`. We register a `data-active` custom variant so the
+ * shadcn-style `data-active:bg-background` utilities (used in `components/ui/tabs.tsx`,
+ * `accordion.tsx`, ...) actually fire on the active Radix item without requiring every
+ * call-site to spell out `data-[state=active]:`.
+ */
+@custom-variant data-active (&[data-state="active"]);
+
 @theme inline {
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
@@ -504,6 +514,33 @@
   border: 1px solid hsl(var(--border));
   color: hsl(var(--muted-foreground));
   cursor: not-allowed;
+}
+
+/* Blackout overlay — background-event koji obavija ceo dan. Profesor
+   ovde vidi „studenti me ne vide" — diagonalne pruge su standardni
+   vizuelni jezik za „nedostupno / van pogona". Slotovi koji upadaju
+   ostaju iznad (z-index podrazumevano), pa profesor jasno vidi spojenu
+   poruku: slot postoji ali je u nedostupnom periodu. */
+.fc .fc-bg-event.fc-event--blackout {
+  background-color: hsl(var(--muted) / 0.55);
+  background-image: repeating-linear-gradient(
+    45deg,
+    hsl(var(--muted-foreground) / 0.18) 0,
+    hsl(var(--muted-foreground) / 0.18) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  opacity: 1;
+  border: none;
+}
+
+.fc .fc-bg-event.fc-event--blackout .fc-event-title {
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .fc .fc-event.fc-event--past {

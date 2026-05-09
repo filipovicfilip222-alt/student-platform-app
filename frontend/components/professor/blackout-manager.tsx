@@ -13,7 +13,7 @@
 import { useMemo, useState } from "react"
 import { CalendarOff, Loader2, Trash2 } from "lucide-react"
 import type { DateRange } from "react-day-picker"
-import { sr } from "date-fns/locale"
+import { srLatn } from "date-fns/locale"
 import { format, isSameDay } from "date-fns"
 
 import {
@@ -108,7 +108,7 @@ export function BlackoutManager() {
               mode="range"
               selected={range}
               onSelect={setRange}
-              locale={sr}
+              locale={srLatn}
               numberOfMonths={2}
               disabled={{ before: new Date() }}
             />

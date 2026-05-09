@@ -252,7 +252,12 @@ async def cancel_appointment(
 
     appointment.status = AppointmentStatus.CANCELLED
 
-    if time_until_start < timedelta(hours=12):
+    # PRD §3 (line 131): otkazivanje < 24h pre termina = +1 strike poen.
+    # Frontend `appointment-cancel-dialog.tsx` koristi isti prag (HOURS_24_MS)
+    # i upozorava studenta pre potvrde — backend i UI MORAJU da budu
+    # sinhronizovani (ranije je backend imao 12h, što je laž student-u
+    # koji je video upozorenje za <24h ali ne dobio strike).
+    if time_until_start < timedelta(hours=24):
         await strike_service.add_late_cancel_strike(
             db=db,
             student_id=current_user.id,
@@ -280,11 +285,33 @@ async def cancel_appointment(
     return appointment
 
 
+# Statusi koji se UVEK smatraju „istorijom" bez obzira na slot_datetime —
+# student je doneo odluku (ili profesor), termin više nije aktuelan.
+# Dashboard „predstojeći" view ih sakriva, „istorija" ih prikazuje.
+_TERMINAL_APPOINTMENT_STATUSES = (
+    AppointmentStatus.CANCELLED,
+    AppointmentStatus.REJECTED,
+    AppointmentStatus.COMPLETED,
+    AppointmentStatus.NO_SHOW,
+)
+
+
 async def list_my_appointments(
     db: AsyncSession,
     current_user: User,
     view: str = "upcoming",
 ) -> list[Appointment]:
+    """List student's appointments split by view-mode.
+
+    "upcoming" — aktivni termini koji se još mogu odigrati: status u
+        {PENDING, APPROVED} I slot u budućnosti. Otkazani / odbijeni /
+        prošli termini eksplicitno isključeni jer dashboard pokazuje
+        „sledeći termin" — student ne želi da vidi termine koje je
+        upravo otkazao kao predstojeće (PRD §3.2).
+
+    "history" — sve ostalo: terminalan status (CANCELLED/REJECTED/
+        COMPLETED/NO_SHOW) ili slot u prošlosti bez obzira na status.
+    """
     now_utc = datetime.now(timezone.utc)
 
     statement = (
@@ -295,9 +322,19 @@ async def list_my_appointments(
     )
 
     if view == "upcoming":
-        statement = statement.where(Appointment.slot.has(AvailabilitySlot.slot_datetime >= now_utc))
+        statement = statement.where(
+            Appointment.status.in_(
+                (AppointmentStatus.PENDING, AppointmentStatus.APPROVED)
+            ),
+            Appointment.slot.has(AvailabilitySlot.slot_datetime >= now_utc),
+        )
     elif view == "history":
-        statement = statement.where(Appointment.slot.has(AvailabilitySlot.slot_datetime < now_utc))
+        # Terminal status u bilo koje vreme + svi termini (PENDING/APPROVED)
+        # čiji je slot u prošlosti (npr. profesor nije markirao COMPLETED).
+        statement = statement.where(
+            (Appointment.status.in_(_TERMINAL_APPOINTMENT_STATUSES))
+            | (Appointment.slot.has(AvailabilitySlot.slot_datetime < now_utc))
+        )
 
     result = await db.execute(statement)
     return list(result.scalars().all())
