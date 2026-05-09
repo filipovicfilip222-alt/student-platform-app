@@ -108,6 +108,12 @@ export interface FaqResponse {
   sort_order: number
 }
 
+export interface SubjectOptionResponse {
+  id: Uuid
+  name: string
+  code: string | null
+}
+
 export interface AvailableSlotResponse {
   id: Uuid
   slot_datetime: IsoDateTime
@@ -126,7 +132,7 @@ export interface ProfessorProfileResponse {
   office_description: string | null
   faculty: Faculty
   areas_of_interest: string[]
-  subjects: string[]
+  subjects: SubjectOptionResponse[]
   faq: FaqResponse[]
   available_slots: AvailableSlotResponse[]
 }

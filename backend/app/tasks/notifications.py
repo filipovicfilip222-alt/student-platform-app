@@ -19,10 +19,11 @@ Pattern:
       worker proces živi duže od jednog event loop-a, pa nema deljenog
       pool-a između ``asyncio.run()`` invokacija (cross-loop greška).
 
-Mapping task → NotificationType (8 taskova, 8 vrednosti enum-a):
+Mapping task → NotificationType (9 taskova, 9 vrednosti enum-a):
 
     send_appointment_confirmed         → APPOINTMENT_CONFIRMED
     send_appointment_rejected          → APPOINTMENT_REJECTED
+    send_appointment_returned          → APPOINTMENT_RETURNED
     send_appointment_reminder(24)      → APPOINTMENT_REMINDER_24H
     send_appointment_reminder(<24)     → APPOINTMENT_REMINDER_1H
     send_strike_added                  → STRIKE_ADDED
@@ -177,6 +178,8 @@ async def _get_appointment(appointment_id: UUID) -> Appointment | None:
     Eager-load-uje:
       - ``slot`` — za ``slot_datetime`` u email/notif body-ju
       - ``professor.user`` — primalac reminder-a + ime u tekstu
+            - ``delegated_user`` — koristi se da bi approval notif rekla
+                „asistent” umesto uvek „profesor” kada je termin delegiran
       - ``lead_student`` — primalac reminder-a (i izvor email-a kad
         student otkaže)
       - ``participants.student`` — non-lead CONFIRMED useri dobijaju
@@ -192,6 +195,7 @@ async def _get_appointment(appointment_id: UUID) -> Appointment | None:
             .options(
                 selectinload(Appointment.slot),
                 selectinload(Appointment.professor).selectinload(Professor.user),
+                selectinload(Appointment.delegated_user),
                 selectinload(Appointment.lead_student),
                 selectinload(Appointment.participants).selectinload(
                     AppointmentParticipant.student
@@ -252,6 +256,18 @@ def _collect_recipients(
     return recipients
 
 
+def _appointment_confirmer(appointment: Appointment) -> tuple[str, str]:
+    confirmer_user = appointment.delegated_user
+    if confirmer_user is not None:
+        return confirmer_user.full_name, "ASISTENT"
+
+    professor_user = appointment.professor.user if appointment.professor else None
+    if professor_user is not None:
+        return professor_user.full_name, "PROFESOR"
+
+    return "profesor", "PROFESOR"
+
+
 # ── Tasks ────────────────────────────────────────────────────────────────────
 
 
@@ -262,15 +278,16 @@ def send_appointment_confirmed(appointment_id: str) -> bool:
         if appointment is None:
             return False
 
-        professor_name = appointment.professor.user.full_name
+        confirmer_name, confirmer_role = _appointment_confirmer(appointment)
         slot_iso = appointment.slot.slot_datetime.isoformat()
+        role_noun = "asistent" if confirmer_role == "ASISTENT" else "profesor"
 
         send_generic_notification_email(
             to_email=appointment.lead_student.email,
             subject="Termin je potvrđen",
             title="Vaš termin je potvrđen",
             body_html=(
-                f"<p>Termin kod profesora <strong>{professor_name}</strong> je potvrđen.</p>"
+                f"<p>Termin kod {role_noun}a <strong>{confirmer_name}</strong> je potvrđen.</p>"
                 f"<p>Datum i vreme: <strong>{slot_iso}</strong>.</p>"
             ),
         )
@@ -279,11 +296,12 @@ def send_appointment_confirmed(appointment_id: str) -> bool:
             user_id=appointment.lead_student.id,
             type=NotificationType.APPOINTMENT_CONFIRMED,
             title="Termin je potvrđen",
-            body=f"Profesor {professor_name} je potvrdio termin {slot_iso}.",
+            body=f"{confirmer_role.title()} {confirmer_name} je potvrdio termin {slot_iso}.",
             data={
                 "appointment_id": str(appointment.id),
                 "slot_datetime": slot_iso,
-                "professor_name": professor_name,
+                "confirmer_name": confirmer_name,
+                "confirmer_role": confirmer_role,
             },
         )
         return True
@@ -320,6 +338,64 @@ def send_appointment_rejected(appointment_id: str, reason: str) -> bool:
                 "appointment_id": str(appointment.id),
                 "reason": final_reason,
                 "professor_name": professor_name,
+            },
+        )
+        return True
+
+    return asyncio.run(_run())
+
+
+@celery_app.task(name="notifications.send_appointment_returned")
+def send_appointment_returned(
+    appointment_id: str,
+    assistant_id: str,
+    reason: str,
+) -> bool:
+    async def _run() -> bool:
+        appointment = await _get_appointment(UUID(appointment_id))
+        if appointment is None:
+            return False
+
+        professor = appointment.professor.user if appointment.professor else None
+        if professor is None:
+            return False
+
+        async with _fresh_db_session() as db:
+            result = await db.execute(select(User).where(User.id == UUID(assistant_id)))
+            assistant = result.scalar_one_or_none()
+            if assistant is None:
+                return False
+
+        assistant_name = assistant.full_name
+        final_reason = reason or appointment.rejection_reason or "Bez dodatnog obrazloženja."
+        slot_iso = appointment.slot.slot_datetime.isoformat()
+
+        send_generic_notification_email(
+            to_email=professor.email,
+            subject="Zahtev je vraćen profesoru",
+            title="Asistent je vratio zahtev",
+            body_html=(
+                f"<p>Poštovani/a <strong>{professor.full_name}</strong>,</p>"
+                f"<p>Asistent <strong>{assistant_name}</strong> je vratio zahtev za termin "
+                f"<strong>{slot_iso}</strong> na Vašu obradu.</p>"
+                f"<p>Razlog: <strong>{final_reason}</strong></p>"
+            ),
+        )
+
+        await _create_inapp(
+            user_id=professor.id,
+            type=NotificationType.APPOINTMENT_RETURNED,
+            title="Asistent je vratio zahtev",
+            body=(
+                f"Asistent {assistant_name} je vratio zahtev za termin {slot_iso}. "
+                f"Razlog: {final_reason}"
+            ),
+            data={
+                "appointment_id": str(appointment.id),
+                "slot_datetime": slot_iso,
+                "assistant_id": str(assistant.id),
+                "assistant_name": assistant_name,
+                "reason": final_reason,
             },
         )
         return True

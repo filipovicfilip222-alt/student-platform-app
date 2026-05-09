@@ -18,6 +18,7 @@ from app.schemas.student import (
     FaqResponse,
     ProfessorProfileResponse,
     ProfessorSearchResponse,
+    SubjectOptionResponse,
 )
 
 
@@ -212,7 +213,14 @@ async def get_professor_profile(db: AsyncSession, professor_id: UUID) -> Profess
         office_description=professor.office_description,
         faculty=user.faculty,
         areas_of_interest=professor.areas_of_interest,
-        subjects=sorted({subject.name for subject in professor.subjects if subject.name}),
+        subjects=sorted(
+            (
+                SubjectOptionResponse(id=subject.id, name=subject.name, code=subject.code)
+                for subject in professor.subjects
+                if subject.name
+            ),
+            key=lambda subject: (subject.code or subject.name, subject.name),
+        ),
         faq=[FaqResponse.model_validate(item) for item in faq_items],
         available_slots=available_slots,
     )

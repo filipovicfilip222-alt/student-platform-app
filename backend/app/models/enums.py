@@ -63,7 +63,7 @@ class DocumentStatus(str, enum.Enum):
 
 
 # ── Notifications ─────────────────────────────────────────────────────────────
-# 16 vrednosti uparene 1:1 sa frontend/types/notification.ts::NotificationType
+# 17 vrednosti uparene 1:1 sa frontend/types/notification.ts::NotificationType
 # i docs/websocket-schema.md §4.4 (redosled iz tabele kataloga).
 #
 # Backend kolona ``notifications.type`` je VARCHAR(50) (vidi
@@ -76,6 +76,7 @@ class NotificationType(str, enum.Enum):
     APPOINTMENT_REJECTED = "APPOINTMENT_REJECTED"
     APPOINTMENT_CANCELLED = "APPOINTMENT_CANCELLED"
     APPOINTMENT_DELEGATED = "APPOINTMENT_DELEGATED"
+    APPOINTMENT_RETURNED = "APPOINTMENT_RETURNED"
     APPOINTMENT_REMINDER_24H = "APPOINTMENT_REMINDER_24H"
     APPOINTMENT_REMINDER_1H = "APPOINTMENT_REMINDER_1H"
     NEW_APPOINTMENT_REQUEST = "NEW_APPOINTMENT_REQUEST"

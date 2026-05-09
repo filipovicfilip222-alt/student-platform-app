@@ -215,6 +215,7 @@ Frontend koristi ovaj enum za:
 | `APPOINTMENT_REJECTED` | profesor reject | `{ appointment_id, reason }` | ✅ |
 | `APPOINTMENT_CANCELLED` | student otkazao | `{ appointment_id, cancelled_by_user_id, cancelled_by_role }` | ✅ |
 | `APPOINTMENT_DELEGATED` | profesor delegate | `{ appointment_id, delegated_to_user_id }` | — |
+| `APPOINTMENT_RETURNED` | asistent vratio zahtev | `{ appointment_id, assistant_id, assistant_name, reason }` | ✅ |
 | `APPOINTMENT_REMINDER_24H` | Celery beat 24h pre | `{ appointment_id, slot_datetime }` | — |
 | `APPOINTMENT_REMINDER_1H` | Celery beat 1h pre | `{ appointment_id, slot_datetime }` | ✅ |
 | `NEW_APPOINTMENT_REQUEST` | student booking (→ prof/asistent) | `{ appointment_id, student_name, slot_datetime }` | — |
@@ -606,6 +607,7 @@ class NotificationType(str, Enum):
     APPOINTMENT_REJECTED  = "APPOINTMENT_REJECTED"
     APPOINTMENT_CANCELLED = "APPOINTMENT_CANCELLED"
     APPOINTMENT_DELEGATED = "APPOINTMENT_DELEGATED"
+    APPOINTMENT_RETURNED = "APPOINTMENT_RETURNED"
     APPOINTMENT_REMINDER_24H = "APPOINTMENT_REMINDER_24H"
     APPOINTMENT_REMINDER_1H  = "APPOINTMENT_REMINDER_1H"
     NEW_APPOINTMENT_REQUEST  = "NEW_APPOINTMENT_REQUEST"
@@ -655,6 +657,7 @@ export type NotificationType =
   | 'APPOINTMENT_REJECTED'
   | 'APPOINTMENT_CANCELLED'
   | 'APPOINTMENT_DELEGATED'
+  | 'APPOINTMENT_RETURNED'
   | 'APPOINTMENT_REMINDER_24H'
   | 'APPOINTMENT_REMINDER_1H'
   | 'NEW_APPOINTMENT_REQUEST'

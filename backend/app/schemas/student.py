@@ -31,6 +31,14 @@ class FaqResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SubjectOptionResponse(BaseModel):
+    id: UUID
+    name: str
+    code: str | None
+
+    model_config = {"from_attributes": True}
+
+
 class ProfessorSearchResponse(BaseModel):
     id: UUID
     full_name: str
@@ -50,7 +58,7 @@ class ProfessorProfileResponse(BaseModel):
     office_description: str | None
     faculty: Faculty
     areas_of_interest: list[str]
-    subjects: list[str]
+    subjects: list[SubjectOptionResponse]
     faq: list[FaqResponse]
     available_slots: list[AvailableSlotResponse]
 

@@ -103,14 +103,7 @@ async def list_requests(
         professor = await get_professor_or_404(db, current_user.id)
         statement = statement.where(Appointment.professor_id == professor.id)
     else:
-        subject_ids = await _assistant_subject_ids(db, current_user.id)
-        assistant_filter = Appointment.delegated_to == current_user.id
-        if subject_ids:
-            statement = statement.where(
-                assistant_filter | Appointment.subject_id.in_(subject_ids)
-            )
-        else:
-            statement = statement.where(assistant_filter)
+        statement = statement.where(Appointment.delegated_to == current_user.id)
 
     if status_filter == "PENDING":
         statement = statement.where(Appointment.status == AppointmentStatus.PENDING)
@@ -148,12 +141,7 @@ async def _get_actionable_request_or_404(
             )
         return appointment
 
-    subject_ids = await _assistant_subject_ids(db, current_user.id)
-    allowed = appointment.delegated_to == current_user.id
-    if not allowed and subject_ids and appointment.subject_id is not None:
-        allowed = appointment.subject_id in subject_ids
-
-    if not allowed:
+    if appointment.delegated_to != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Nemate pristup ovom zahtevu.",
@@ -200,8 +188,29 @@ async def reject_request(
             detail="Samo PENDING zahtevi mogu biti odbijeni.",
         )
 
+    rejection_reason = reason.strip()
+
+    if current_user.role == UserRole.ASISTENT:
+        # Asistent ne odbija zahtev za studenta direktno; vraća ga
+        # profesoru kao običan PENDING zahtev, bez delegacije.
+        appointment.status = AppointmentStatus.PENDING
+        appointment.delegated_to = None
+        appointment.rejection_reason = rejection_reason
+        await db.flush()
+
+        await db.commit()
+
+        from app.tasks.notifications import send_appointment_returned
+
+        send_appointment_returned.delay(
+            str(appointment.id),
+            str(current_user.id),
+            rejection_reason,
+        )
+        return appointment
+
     appointment.status = AppointmentStatus.REJECTED
-    appointment.rejection_reason = reason.strip()
+    appointment.rejection_reason = rejection_reason
 
     await db.flush()
 

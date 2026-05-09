@@ -59,10 +59,16 @@ import {
 } from "@/lib/constants/topic-categories"
 import { formatDateTime } from "@/lib/utils/date"
 import { toastApiError, toastSuccess } from "@/lib/utils/errors"
-import type { AppointmentResponse, AvailableSlotResponse, TopicCategory } from "@/types"
+import type {
+  AppointmentResponse,
+  AvailableSlotResponse,
+  SubjectOptionResponse,
+  TopicCategory,
+} from "@/types"
 
 const schema = z.object({
   topic_category: z.enum(TOPIC_CATEGORIES as unknown as [string, ...string[]]),
+  subject_id: z.string().uuid().optional(),
   description: z
     .string()
     .trim()
@@ -76,6 +82,7 @@ export interface AppointmentRequestFormProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   slot: AvailableSlotResponse | null
+  subjects: SubjectOptionResponse[]
   onSubmitted?: (appointment: AppointmentResponse) => void
 }
 
@@ -83,6 +90,7 @@ export function AppointmentRequestForm({
   open,
   onOpenChange,
   slot,
+  subjects,
   onSubmitted,
 }: AppointmentRequestFormProps) {
   const router = useRouter()
@@ -94,16 +102,21 @@ export function AppointmentRequestForm({
     resolver: zodResolver(schema),
     defaultValues: {
       topic_category: "OSTALO",
+      subject_id: subjects[0]?.id,
       description: "",
     },
   })
 
   useEffect(() => {
     if (open) {
-      form.reset({ topic_category: "OSTALO", description: "" })
+      form.reset({
+        topic_category: "OSTALO",
+        subject_id: subjects[0]?.id,
+        description: "",
+      })
       setStagedFiles([])
     }
-  }, [open, form])
+  }, [open, form, subjects])
 
   if (!slot) return null
 
@@ -116,6 +129,7 @@ export function AppointmentRequestForm({
         slot_id: slot.id,
         topic_category: values.topic_category as TopicCategory,
         description: values.description,
+        ...(values.subject_id ? { subject_id: values.subject_id } : {}),
       })
 
       if (stagedFiles.length > 0) {
@@ -225,6 +239,40 @@ export function AppointmentRequestForm({
                 </FormItem>
               )}
             />
+
+            {subjects.length > 0 && (
+              <FormField
+                control={form.control}
+                name="subject_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Predmet</FormLabel>
+                    <Select
+                      value={field.value ?? ""}
+                      onValueChange={field.onChange}
+                      disabled={isSubmitting}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Izaberite predmet" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {subjects.map((subject) => (
+                          <SelectItem key={subject.id} value={subject.id}>
+                            {subject.code ? `${subject.code} · ${subject.name}` : subject.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Izabrani predmet se koristi za delegiranje termina asistentu.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <div className="space-y-2">
               <FormLabel asChild>

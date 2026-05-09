@@ -36,6 +36,10 @@ const COPY: Record<NotificationType, NotificationCopy> = {
     toastTitle: "Termin delegiran",
     fallbackTitle: "Termin je preuzeo asistent",
   },
+  APPOINTMENT_RETURNED: {
+    toastTitle: "Zahtev vraćen",
+    fallbackTitle: "Asistent je vratio zahtev",
+  },
   APPOINTMENT_REMINDER_24H: {
     toastTitle: "Podsetnik: termin sutra",
     fallbackTitle: "Termin sutra",

@@ -105,6 +105,7 @@ export default function ProfessorProfilePage() {
         open={pickedSlot !== null}
         onOpenChange={(open) => !open && setPickedSlot(null)}
         slot={pickedSlot}
+        subjects={professor.subjects}
       />
     </div>
   )

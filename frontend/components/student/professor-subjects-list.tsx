@@ -9,9 +9,10 @@ import { BookOpen } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import type { SubjectOptionResponse } from "@/types"
 
 export interface ProfessorSubjectsListProps {
-  subjects: string[]
+  subjects: SubjectOptionResponse[]
 }
 
 export function ProfessorSubjectsList({ subjects }: ProfessorSubjectsListProps) {
@@ -30,8 +31,8 @@ export function ProfessorSubjectsList({ subjects }: ProfessorSubjectsListProps) 
       <CardContent className="p-5 pt-2">
         <div className="flex flex-wrap gap-1.5">
           {subjects.map((subject) => (
-            <Badge key={subject} variant="outline" className="text-xs">
-              {subject}
+            <Badge key={subject.id} variant="outline" className="text-xs">
+              {subject.code ? `${subject.code} · ${subject.name}` : subject.name}
             </Badge>
           ))}
         </div>

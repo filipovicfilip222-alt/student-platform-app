@@ -12,7 +12,7 @@
 import type { IsoDateTime, Uuid } from "./common"
 
 /**
- * The 16 notification `type` values enumerated in websocket-schema.md §4.4.
+ * The 17 notification `type` values enumerated in websocket-schema.md §4.4.
  * Ordered exactly as the schema table to keep code review diffs tidy.
  */
 export type NotificationType =
@@ -20,6 +20,7 @@ export type NotificationType =
   | "APPOINTMENT_REJECTED"
   | "APPOINTMENT_CANCELLED"
   | "APPOINTMENT_DELEGATED"
+  | "APPOINTMENT_RETURNED"
   | "APPOINTMENT_REMINDER_24H"
   | "APPOINTMENT_REMINDER_1H"
   | "NEW_APPOINTMENT_REQUEST"
@@ -70,6 +71,7 @@ export const TOAST_NOTIFICATION_TYPES: ReadonlySet<NotificationType> = new Set([
   "APPOINTMENT_CONFIRMED",
   "APPOINTMENT_REJECTED",
   "APPOINTMENT_CANCELLED",
+  "APPOINTMENT_RETURNED",
   "APPOINTMENT_REMINDER_1H",
   "WAITLIST_OFFER",
   "STRIKE_ADDED",
