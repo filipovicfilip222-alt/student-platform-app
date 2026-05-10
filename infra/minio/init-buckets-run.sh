@@ -1,5 +1,4 @@
 #!/bin/sh
-# Keep this file LF-terminated so /bin/sh can execute it cleanly in Docker.
 set -e
 
 MINIO_ALIAS="local"

@@ -3,10 +3,11 @@
 seed_db.py — Populates the database with initial users from PRD §1.2.
 
 Seed data:
-  Admins (studentska služba):  sluzba@fon.bg.ac.rs, sluzba@etf.bg.ac.rs
-  Profesori (FON):             profesor1@fon.bg.ac.rs, profesor2@fon.bg.ac.rs
-  Profesor (ETF):              profesor1@etf.bg.ac.rs
-  Asistent (FON):              asistent1@fon.bg.ac.rs
+    Admins (studentska služba):  sluzba@fon.bg.ac.rs, sluzba@etf.bg.ac.rs
+    Profesori (FON):             profesor1@fon.bg.ac.rs, profesor2@fon.bg.ac.rs
+    Profesor (ETF):              profesor1@etf.bg.ac.rs
+    Asistent (FON):              asistent1@fon.bg.ac.rs
+    Predmeti za delegiranje:     demo FON predmeti vezani za profesor1 i asistent1
 
 Usage (run from backend/ directory with .env present):
     python ../scripts/seed_db.py
@@ -23,13 +24,14 @@ from pathlib import Path
 # ── Make sure backend/ is on sys.path ─────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
-from sqlalchemy import select
+from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
 from app.core.security import hash_password
 from app.models.enums import Faculty, UserRole
 from app.models.professor import Professor
+from app.models.subject import Subject, subject_assistants
 from app.models.user import User
 
 # ── Seed definitions ───────────────────────────────────────────────────────────
@@ -100,6 +102,23 @@ SEED_USERS: list[dict] = [
     },
 ]
 
+SEED_SUBJECTS: list[dict] = [
+    {
+        "code": "FON-BP-2026",
+        "name": "Baze podataka",
+        "faculty": Faculty.FON,
+        "professor_email": "profesor1@fon.bg.ac.rs",
+        "assistant_emails": ["asistent1@fon.bg.ac.rs"],
+    },
+    {
+        "code": "FON-OS-2026",
+        "name": "Operativni sistemi",
+        "faculty": Faculty.FON,
+        "professor_email": "profesor1@fon.bg.ac.rs",
+        "assistant_emails": ["asistent1@fon.bg.ac.rs"],
+    },
+]
+
 
 # ── Core seeding logic ─────────────────────────────────────────────────────────
 
@@ -110,6 +129,7 @@ async def seed(password: str) -> None:
     async with session_factory() as db:
         created = 0
         skipped = 0
+        users_by_email: dict[str, User] = {}
 
         for entry in SEED_USERS:
             email = entry["email"].lower()
@@ -118,6 +138,7 @@ async def seed(password: str) -> None:
             if existing:
                 print(f"  SKIP  {email} (already exists)")
                 skipped += 1
+                users_by_email[email] = existing
                 continue
 
             user = User(
@@ -132,6 +153,7 @@ async def seed(password: str) -> None:
             )
             db.add(user)
             await db.flush()
+            users_by_email[email] = user
 
             if prof_data := entry.get("professor_profile"):
                 db.add(
@@ -149,8 +171,70 @@ async def seed(password: str) -> None:
 
         await db.commit()
 
+        subject_created = 0
+        subject_skipped = 0
+
+        for subject_data in SEED_SUBJECTS:
+            code = subject_data["code"]
+
+            existing_subject = (
+                await db.execute(select(Subject).where(Subject.code == code))
+            ).scalar_one_or_none()
+            if existing_subject:
+                print(f"  SKIP  subject {code} (already exists)")
+                subject_skipped += 1
+                subject = existing_subject
+            else:
+                professor_email = subject_data["professor_email"].lower()
+                professor_user = users_by_email.get(professor_email)
+                if professor_user is None:
+                    raise RuntimeError(f"Professor seed user not found: {professor_email}")
+
+                professor = (
+                    await db.execute(select(Professor).where(Professor.user_id == professor_user.id))
+                ).scalar_one_or_none()
+                if professor is None:
+                    raise RuntimeError(f"Professor profile not found for: {professor_email}")
+
+                subject = Subject(
+                    name=subject_data["name"],
+                    code=code,
+                    faculty=subject_data["faculty"],
+                    professor_id=professor.id,
+                )
+                db.add(subject)
+                await db.flush()
+                print(f"  CREATE subject {code}  [{subject_data['name']}]")
+                subject_created += 1
+
+            for assistant_email in subject_data["assistant_emails"]:
+                assistant_user = users_by_email.get(assistant_email.lower())
+                if assistant_user is None:
+                    raise RuntimeError(f"Assistant seed user not found: {assistant_email}")
+
+                existing_link = await db.execute(
+                    select(subject_assistants.c.subject_id).where(
+                        subject_assistants.c.subject_id == subject.id,
+                        subject_assistants.c.assistant_id == assistant_user.id,
+                    )
+                )
+                if existing_link.scalar_one_or_none() is not None:
+                    continue
+
+                await db.execute(
+                    insert(subject_assistants).values(
+                        subject_id=subject.id,
+                        assistant_id=assistant_user.id,
+                    )
+                )
+
+        await db.commit()
+
     await engine.dispose()
-    print(f"\nDone. Created: {created}  |  Skipped (already exist): {skipped}")
+    print(
+        f"\nDone. Users created: {created}  |  Users skipped: {skipped}"
+        f"  |  Subjects created: {subject_created}  |  Subjects skipped: {subject_skipped}"
+    )
     if created:
         print(f"\n⚠  Seed password used: {password!r}")
         print("   Change all passwords immediately after first login!\n")

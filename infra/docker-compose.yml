@@ -67,7 +67,7 @@ services:
     entrypoint: /bin/sh
     command: /init-buckets.sh
     volumes:
-      - ./minio/init-buckets.sh:/init-buckets.sh:ro
+      - ./minio/init-buckets-run.sh:/init-buckets.sh:ro
     environment:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
