@@ -168,16 +168,6 @@ export default function DashboardPage() {
           </div>
         </section>
       )}
-
-      {/* Profile link footer */}
-      <div className="flex items-center justify-end">
-        <Button asChild variant="ghost" size="sm">
-          <Link href="#" aria-disabled>
-            <UserCog aria-hidden />
-            Podešavanja profila (uskoro)
-          </Link>
-        </Button>
-      </div>
     </div>
   )
 }
